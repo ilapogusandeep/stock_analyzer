@@ -1,0 +1,50 @@
+#!/bin/bash
+# 🏆 Universal Stock Analyzer Launcher
+
+# Check if we want web interface
+if [ "$1" = "--web" ] || [ "$1" = "web" ]; then
+    echo "🌐 Launching Web Interface..."
+    echo "============================="
+    echo ""
+    echo "🚀 Features:"
+    echo "  • Interactive charts and visualizations"
+    echo "  • ML-powered predictions"
+    echo "  • Comprehensive fundamental analysis"
+    echo "  • Enhanced sentiment analysis"
+    echo "  • Professional recommendation engine"
+    echo ""
+    echo "🌐 The web interface will open in your browser at:"
+    echo "   http://localhost:8501"
+    echo ""
+    echo "Press Ctrl+C to stop the server"
+    echo ""
+    
+    # Launch web interface
+    streamlit run sidebar_web.py --server.port 8501
+else
+    # Command line interface
+    if [ $# -eq 0 ]; then
+        echo "🏆 Universal Stock Analyzer"
+        echo "==========================="
+        echo ""
+        echo "📊 Command Line Usage:"
+        echo "  ./analyze AAPL                    # Analyze Apple stock"
+        echo "  ./analyze TSLA                     # Analyze Tesla stock"
+        echo "  ./analyze NVDA --no-ml             # Analyze without ML predictions"
+        echo "  ./analyze MSFT --no-fundamentals   # Analyze without fundamentals"
+        echo "  ./analyze GOOGL --no-sentiment    # Analyze without sentiment"
+        echo ""
+        echo "🌐 Web Interface Usage:"
+        echo "  ./analyze --web                    # Launch web interface"
+        echo "  ./analyze web                      # Launch web interface"
+        echo ""
+        echo "🎯 Example:"
+        echo "  ./analyze AAPL"
+        echo ""
+        echo "⚠️  Please provide a stock ticker symbol"
+        exit 1
+    fi
+    
+    # Run command line analysis
+    python3 stock_analyzer.py "$@"
+fi

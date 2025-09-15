@@ -1,0 +1,28 @@
+# Core dependencies
+pandas
+numpy
+requests
+beautifulsoup4
+
+# Financial data
+yfinance
+
+# Machine Learning
+scikit-learn
+
+# NLP and Sentiment Analysis
+textblob
+vaderSentiment
+
+# Data visualization
+plotly
+
+# Web framework
+streamlit
+
+# Explainable AI
+shap
+
+# Utilities
+python-dateutil
+pytz
