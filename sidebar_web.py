@@ -139,18 +139,26 @@ with st.sidebar:
 
 # Main content area
 if analyze_clicked and ticker:
-    with st.spinner(f"Analyzing {ticker}..."):
-        try:
-            from stock_analyzer import UniversalStockAnalyzer
-            analyzer = UniversalStockAnalyzer(ticker)
-            
-            # Use quick mode settings if enabled
-            if quick_mode:
-                data = analyzer.analyze(show_charts, False, show_fundamentals, show_sentiment)  # Skip ML
-                if data and 'backtest_results' in data:
-                    data['backtest_results'] = None  # Skip backtest
-            else:
-                data = analyzer.analyze(show_charts, show_ml, show_fundamentals, show_sentiment)
+    from enhanced_error_handling import show_loading_progress, handle_api_error, retry_on_failure
+    from stock_analyzer import UniversalStockAnalyzer
+
+    @handle_api_error
+    @retry_on_failure(max_retries=3)
+    def analyze_stock(analyzer, show_charts, show_ml, show_fundamentals, show_sentiment, quick_mode):
+        if quick_mode:
+            data = analyzer.analyze(show_charts, False, show_fundamentals, show_sentiment)
+            if data and 'backtest_results' in data:
+                data['backtest_results'] = None
+        else:
+            data = analyzer.analyze(show_charts, show_ml, show_fundamentals, show_sentiment)
+        return data
+
+    with show_loading_progress(total_steps=5) as progress:
+        progress.update("🔍 Initializing analyzer...")
+        analyzer = UniversalStockAnalyzer(ticker)
+        
+        progress.update("📊 Fetching market data...")
+        data = analyze_stock(analyzer, show_charts, show_ml, show_fundamentals, show_sentiment, quick_mode)
             
             if data:
                 st.success(f"✅ {ticker} Analysis Complete")
