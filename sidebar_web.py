@@ -107,7 +107,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Main Header
-st.markdown('<div class="main-header">🏆 Professional Stock Analyzer</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🏆 Stock Analyzer</div>', unsafe_allow_html=True)
 
 # Sidebar for controls
 with st.sidebar:
@@ -292,7 +292,7 @@ if analyze_clicked and ticker:
                 
                 # Sentiment Analysis - Collapsible
                 if show_sentiment:
-                    with st.expander("😊 Sentiment Analysis", expanded=False):
+                    with st.expander("😊 Advanced Sentiment Analysis", expanded=False):
                         col1, col2, col3, col4, col5, col6 = st.columns(6)
                         with col1:
                             sentiment_emoji = "😊" if sentiment_data['sentiment_label'] == 'POSITIVE' else "😞" if sentiment_data['sentiment_label'] == 'NEGATIVE' else "😐"
@@ -307,6 +307,50 @@ if analyze_clicked and ticker:
                             st.metric("Social Sentiment", f"{sentiment_data['social_sentiment']:+.3f}")
                         with col6:
                             st.metric("News Count", f"{sentiment_data['news_count']}")
+                        
+                        # Advanced sentiment breakdown if available
+                        if 'advanced_sentiment' in sentiment_data:
+                            advanced = sentiment_data['advanced_sentiment']
+                            st.markdown("#### 🔬 Advanced Analysis Breakdown")
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Overall Label", advanced.get('label', 'N/A'))
+                            with col2:
+                                st.metric("Overall Score", f"{advanced.get('score', 0):+.3f}")
+                            with col3:
+                                st.metric("Overall Confidence", f"{advanced.get('confidence', 0):.1%}")
+                            with col4:
+                                st.metric("Texts Analyzed", advanced.get('text_count', 0))
+                            
+                            # Score distribution
+                            if 'score_distribution' in advanced:
+                                dist = advanced['score_distribution']
+                                st.markdown("#### 📊 Sentiment Distribution")
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Positive", dist.get('positive', 0))
+                                with col2:
+                                    st.metric("Neutral", dist.get('neutral', 0))
+                                with col3:
+                                    st.metric("Negative", dist.get('negative', 0))
+                            
+                            # Individual results breakdown
+                            if 'individual_results' in advanced and advanced['individual_results']:
+                                st.markdown("#### 📰 Individual Article Analysis")
+                                for i, result in enumerate(advanced['individual_results'][:5], 1):
+                                    col1, col2, col3 = st.columns([3, 1, 1])
+                                    with col1:
+                                        st.markdown(f"**{i}.** {result.get('label', 'N/A')} ({result.get('score', 0):+.2f})")
+                                    with col2:
+                                        st.markdown(f"{result.get('confidence', 0):.0%}")
+                                    with col3:
+                                        st.markdown(f"{result.get('score', 0):+.2f}")
+                        
+                        # Sentiment explanation if available
+                        if 'sentiment_explanation' in sentiment_data:
+                            st.markdown("#### 💡 Sentiment Explanation")
+                            st.info(sentiment_data['sentiment_explanation'])
                 
                 # Institutional Holdings - Collapsible
                 institutional_data = data.get('institutional_data', {})
@@ -354,62 +398,211 @@ if analyze_clicked and ticker:
                 # Earnings History - Separate Section
                 if institutional_data:
                     earnings_history = institutional_data.get('earnings_data', {}).get('history', [])
-                    if earnings_history:
-                        with st.expander("📊 Earnings History", expanded=False):
-                            st.markdown("#### 📊 Recent Earnings Performance")
-                            
-                            # Create table data - reverse order to show latest first
-                            earnings_data = []
-                            for earning in reversed(earnings_history[:5]):  # Reverse to show latest first
-                                surprise_pct = earning.get('surprise_percent', 0)
-                                if surprise_pct != 0 and surprise_pct != 'N/A':
-                                    surprise_indicator = "🎯" if surprise_pct > 0 else "⚠️"
-                                    surprise_str = f"{surprise_indicator}{surprise_pct:+.1%}"
-                                else:
-                                    surprise_str = "📊 N/A"
+                    revenue_growth = institutional_data.get('earnings_data', {}).get('revenue_growth', {})
+                    
+                    if earnings_history or revenue_growth:
+                        with st.expander("📊 Earnings History & Revenue Growth", expanded=False):
+                            # Revenue Growth Section
+                            if revenue_growth and revenue_growth.get('yoy_growth') != 'N/A':
+                                st.markdown("#### 📈 Revenue Growth Analysis")
                                 
-                                earnings_data.append({
-                                    'Quarter': earning['quarter'],
-                                    'Actual EPS': f"{earning['actual_eps']}" if earning['actual_eps'] != 'N/A' else 'N/A',
-                                    'Estimate': f"{earning['estimate_eps']}" if earning['estimate_eps'] != 'N/A' else 'N/A',
-                                    'Difference': f"{earning['surprise']}" if earning['surprise'] != 'N/A' else 'N/A',
-                                    'Surprise': surprise_str
-                                })
+                                col1, col2, col3, col4 = st.columns(4)
+                                
+                                with col1:
+                                    yoy_growth = revenue_growth.get('yoy_growth', 'N/A')
+                                    if yoy_growth != 'N/A':
+                                        growth_color = "🟢" if yoy_growth > 0 else "🔴" if yoy_growth < 0 else "🟡"
+                                        st.metric("YoY Revenue Growth", f"{growth_color}{yoy_growth:+.1f}%")
+                                    else:
+                                        st.metric("YoY Revenue Growth", "N/A")
+                                
+                                with col2:
+                                    ytd_growth = revenue_growth.get('ytd_growth', 'N/A')
+                                    if ytd_growth != 'N/A':
+                                        growth_color = "🟢" if ytd_growth > 0 else "🔴" if ytd_growth < 0 else "🟡"
+                                        st.metric("YTD Revenue Growth", f"{growth_color}{ytd_growth:+.1f}%")
+                                    else:
+                                        st.metric("YTD Revenue Growth", "N/A")
+                                
+                                with col3:
+                                    current_revenue = revenue_growth.get('current_year_revenue', 'N/A')
+                                    if current_revenue != 'N/A':
+                                        st.metric("Current Year Revenue", f"${current_revenue/1e9:.1f}B")
+                                    else:
+                                        st.metric("Current Year Revenue", "N/A")
+                                
+                                with col4:
+                                    growth_trend = revenue_growth.get('growth_trend', 'N/A')
+                                    if growth_trend == 'positive':
+                                        st.metric("Growth Trend", "🟢 Positive")
+                                    elif growth_trend == 'negative':
+                                        st.metric("Growth Trend", "🔴 Negative")
+                                    elif growth_trend == 'stable':
+                                        st.metric("Growth Trend", "🟡 Stable")
+                                    else:
+                                        st.metric("Growth Trend", "N/A")
+                                
+                                st.markdown("---")
                             
-                            # Use st.dataframe instead of st.table to remove row numbers
-                            st.dataframe(earnings_data, use_container_width=True, hide_index=True)
+                            # Earnings History Section
+                            if earnings_history:
+                                st.markdown("#### 📊 Recent Earnings Performance")
+                                
+                                # Create table data - reverse order to show latest first
+                                earnings_data = []
+                                for earning in reversed(earnings_history[:5]):  # Reverse to show latest first
+                                    surprise_pct = earning.get('surprise_percent', 0)
+                                    if surprise_pct != 0 and surprise_pct != 'N/A':
+                                        surprise_indicator = "🎯" if surprise_pct > 0 else "⚠️"
+                                        surprise_str = f"{surprise_indicator}{surprise_pct:+.1%}"
+                                    else:
+                                        surprise_str = "📊 N/A"
+                                    
+                                    earnings_data.append({
+                                        'Quarter': earning['quarter'],
+                                        'Actual EPS': f"{earning['actual_eps']}" if earning['actual_eps'] != 'N/A' else 'N/A',
+                                        'Estimate': f"{earning['estimate_eps']}" if earning['estimate_eps'] != 'N/A' else 'N/A',
+                                        'Difference': f"{earning['surprise']}" if earning['surprise'] != 'N/A' else 'N/A',
+                                        'Surprise': surprise_str
+                                    })
+                                
+                                # Use st.dataframe instead of st.table to remove row numbers
+                                st.dataframe(earnings_data, use_container_width=True, hide_index=True)
                 
-                # ML Prediction - Collapsible
-                if show_ml and ml_prediction:
-                    with st.expander("🤖 Machine Learning Prediction", expanded=True):
-                        col1, col2, col3, col4, col5, col6 = st.columns(6)
-                        with col1:
-                            direction_emoji = "🟢" if "BULLISH" in ml_prediction['direction'] else "🔴" if "BEARISH" in ml_prediction['direction'] else "🟡"
-                            st.markdown(f"**Direction:** {ml_prediction['direction']} {direction_emoji}")
-                        with col2:
-                            st.metric("Confidence", f"{ml_prediction['confidence']:.1%}")
-                        with col3:
-                            st.metric("Price Target", f"${ml_prediction['price_target']:.2f}")
-                        with col4:
-                            st.metric("Expected Return", f"{ml_prediction['expected_return']:+.1%}")
-                        with col5:
-                            scenarios = ml_prediction['scenario_probabilities']
-                            st.metric("Bullish Prob", f"{scenarios['bullish']:.1%}")
-                        with col6:
-                            st.metric("Bearish Prob", f"{scenarios['bearish']:.1%}")
-                        
-                        # SHAP Explanation
-                        if ml_prediction['shap_explanations']:
-                            with st.expander("🔍 Model Explanation (SHAP)", expanded=False):
-                                st.markdown(f"**Explanation:** {ml_prediction['shap_explanations']['explanation']}")
+                # Enhanced Price Prediction - Collapsible
+                if show_ml:
+                    with st.expander("🔮 Enhanced Price Prediction", expanded=True):
+                        try:
+                            from enhanced_price_predictor import EnhancedPricePredictor
+                            predictor = EnhancedPricePredictor(ticker)
+                            prediction_result = predictor.generate_comprehensive_prediction()
+                            
+                            if prediction_result:
+                                current_price = prediction_result['current_price']
                                 
-                                st.markdown("**Top Feature Drivers:**")
+                                # Main prediction metrics
                                 col1, col2, col3, col4, col5, col6 = st.columns(6)
-                                for i, (feature, contribution) in enumerate(ml_prediction['shap_explanations']['top_features'][:6]):
-                                    with [col1, col2, col3, col4, col5, col6][i]:
-                                        # Convert numpy array to float if needed
-                                        contrib_value = float(contribution) if hasattr(contribution, '__iter__') else contribution
-                                        st.metric(feature.replace('_', ' ').title(), f"{contrib_value:+.3f}")
+                                with col1:
+                                    st.metric("Current Price", f"${current_price:.2f}")
+                                with col2:
+                                    overall_score = prediction_result['overall_score']
+                                    st.metric("Overall Score", f"{overall_score['score']}/{overall_score['max_score']}")
+                                with col3:
+                                    st.metric("Recommendation", overall_score['recommendation'])
+                                with col4:
+                                    st.metric("Features Used", prediction_result['features_used'])
+                                with col5:
+                                    st.metric("Data Sources", len(prediction_result['data_sources']))
+                                with col6:
+                                    st.metric("Prediction Date", prediction_result['prediction_date'][:10])
+                                
+                                # Price predictions by timeline
+                                st.markdown("#### 🎯 Price Predictions by Timeline")
+                                if prediction_result['prediction_horizons']:
+                                    col1, col2, col3, col4 = st.columns(4)
+                                    horizons = list(prediction_result['prediction_horizons'].keys())
+                                    for i, horizon in enumerate(horizons[:4]):
+                                        pred = prediction_result['prediction_horizons'][horizon]
+                                        with [col1, col2, col3, col4][i]:
+                                            st.metric(
+                                                f"{horizon} Target", 
+                                                f"${pred['price_target']:.2f}",
+                                                f"{pred['price_change_pct']:+.1f}%"
+                                            )
+                                            st.caption(f"Confidence: {pred['confidence']:.1%}")
+                                
+                                # Price scenarios
+                                st.markdown("#### 📊 Price Scenarios")
+                                scenarios = prediction_result['scenarios']
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    bullish = scenarios['bullish']
+                                    st.metric(
+                                        "🟢 Bullish Scenario",
+                                        f"${bullish['price_target']:.2f}",
+                                        f"{bullish['price_change_pct']:+.1f}%"
+                                    )
+                                    st.caption(f"Probability: {bullish['probability']:.1%}")
+                                    st.caption(bullish['description'])
+                                
+                                with col2:
+                                    neutral = scenarios['neutral']
+                                    st.metric(
+                                        "🟡 Neutral Scenario",
+                                        f"${neutral['price_target']:.2f}",
+                                        f"{neutral['price_change_pct']:+.1f}%"
+                                    )
+                                    st.caption(f"Probability: {neutral['probability']:.1%}")
+                                    st.caption(neutral['description'])
+                                
+                                with col3:
+                                    bearish = scenarios['bearish']
+                                    st.metric(
+                                        "🔴 Bearish Scenario",
+                                        f"${bearish['price_target']:.2f}",
+                                        f"{bearish['price_change_pct']:+.1f}%"
+                                    )
+                                    st.caption(f"Probability: {bearish['probability']:.1%}")
+                                    st.caption(bearish['description'])
+                                
+                                # Analyst targets
+                                analyst_targets = prediction_result['analyst_targets']
+                                if analyst_targets:
+                                    st.markdown("#### 👔 Analyst Price Targets")
+                                    col1, col2, col3, col4 = st.columns(4)
+                                    
+                                    target_sources = ['yahoo_mean', 'enhanced_mean', 'consensus_mean']
+                                    for i, source in enumerate(target_sources):
+                                        if source in analyst_targets and analyst_targets[source] > 0:
+                                            with [col1, col2, col3, col4][i]:
+                                                target = analyst_targets[source]
+                                                st.metric(
+                                                    source.replace('_', ' ').title(),
+                                                    f"${target:.2f}",
+                                                    f"{((target - current_price) / current_price * 100):+.1f}%"
+                                                )
+                                
+                                # Key factors
+                                st.markdown("#### 🔍 Key Prediction Factors")
+                                factors = overall_score['factors']
+                                if factors:
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.markdown("**✅ Positive Factors:**")
+                                        for factor in factors[:5]:
+                                            st.markdown(f"• {factor}")
+                                    with col2:
+                                        st.markdown("**📊 Prediction Details:**")
+                                        st.markdown(f"• Features Analyzed: {prediction_result['features_used']}")
+                                        st.markdown(f"• Data Sources: {', '.join(prediction_result['data_sources'][:3])}")
+                                        st.markdown(f"• Overall Confidence: {overall_score['percentage']:.1f}%")
+                                
+                            else:
+                                st.warning("Enhanced price prediction not available")
+                                
+                        except Exception as e:
+                            st.warning(f"Enhanced price prediction error: {str(e)}")
+                            # Fallback to original ML prediction
+                            if ml_prediction:
+                                st.markdown("#### 🤖 Basic ML Prediction (Fallback)")
+                                col1, col2, col3, col4, col5, col6 = st.columns(6)
+                                with col1:
+                                    direction_emoji = "🟢" if "BULLISH" in ml_prediction['direction'] else "🔴" if "BEARISH" in ml_prediction['direction'] else "🟡"
+                                    st.markdown(f"**Direction:** {ml_prediction['direction']} {direction_emoji}")
+                                with col2:
+                                    st.metric("Confidence", f"{ml_prediction['confidence']:.1%}")
+                                with col3:
+                                    price_target = ml_prediction.get('price_target', 0)
+                                    st.metric("Price Target", f"${price_target:.2f}")
+                                with col4:
+                                    expected_return = ml_prediction.get('expected_return', 0)
+                                    st.metric("Expected Return", f"{expected_return:+.1%}")
+                                with col5:
+                                    scenarios = ml_prediction.get('scenario_probabilities', {'bullish': 0, 'bearish': 0})
+                                    st.metric("Bullish Prob", f"{scenarios['bullish']:.1%}")
+                                with col6:
+                                    st.metric("Bearish Prob", f"{scenarios['bearish']:.1%}")
                 
                 # Enhanced Backtest Results - Collapsible
                 if show_backtest and backtest_results:
@@ -540,58 +733,199 @@ if analyze_clicked and ticker:
                 
                 # Data Sources - Collapsible
                 with st.expander("📊 Data Sources", expanded=False):
-                    # Collect all data sources used
-                    sources_used = []
+                    # Collect all data sources with links
+                    sources_with_links = []
                     
                     # Market data sources
-                    sources_used.append("📈 Yahoo Finance (Market Data)")
+                    sources_with_links.append({
+                        'name': "📈 Yahoo Finance (Market Data)",
+                        'url': "https://finance.yahoo.com",
+                        'description': "Real-time market data, financials, and analyst ratings"
+                    })
                     
-                    # News sources
+                    # Enhanced news sources
                     if show_sentiment and sentiment_data.get('sources'):
                         news_sources = sentiment_data['sources']
-                        sources_used.extend([f"📰 {source}" for source in news_sources])
+                        for source in news_sources:
+                            sources_with_links.append({
+                                'name': f"📰 {source}",
+                                'url': "#",
+                                'description': "News sentiment analysis"
+                            })
                     else:
-                        sources_used.append("📰 News APIs (Yahoo Finance, MarketWatch, Reuters, Bloomberg, CNBC, Benzinga)")
+                        sources_with_links.extend([
+                            {
+                                'name': "📰 NewsAPI (1000 requests/month free)",
+                                'url': "https://newsapi.org",
+                                'description': "Global news headlines and articles"
+                            },
+                            {
+                                'name': "📰 Alpha Vantage News (500 calls/day free)",
+                                'url': "https://www.alphavantage.co",
+                                'description': "Financial news and market sentiment"
+                            },
+                            {
+                                'name': "📰 Yahoo Finance RSS (Free)",
+                                'url': f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US",
+                                'description': "Real-time financial news feed"
+                            },
+                            {
+                                'name': "📰 MarketWatch RSS (Free)",
+                                'url': f"https://feeds.marketwatch.com/marketwatch/marketpulse/",
+                                'description': "Market news and analysis"
+                            },
+                            {
+                                'name': "📰 Google News RSS (Free)",
+                                'url': f"https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en",
+                                'description': "Comprehensive news coverage"
+                            }
+                        ])
                     
                     # Social media sources
                     if show_sentiment:
-                        sources_used.append("🐦 Social Media (Twitter, Reddit, StockTwits)")
+                        sources_with_links.extend([
+                            {
+                                'name': "🐦 Reddit API (Pushshift - Free)",
+                                'url': "https://www.reddit.com",
+                                'description': "Social sentiment from Reddit discussions"
+                            },
+                            {
+                                'name': "🐦 StockTwits API (Free)",
+                                'url': f"https://stocktwits.com/symbol/{ticker}",
+                                'description': "Real-time social trading sentiment"
+                            },
+                            {
+                                'name': "🐦 Social Media Sentiment Analysis",
+                                'url': "#",
+                                'description': "Advanced sentiment analysis from social platforms"
+                            }
+                        ])
                     
                     # Analyst data
                     if show_fundamentals:
-                        sources_used.append("👔 Analyst Ratings (Yahoo Finance)")
+                        sources_with_links.extend([
+                            {
+                                'name': "👔 Yahoo Finance Analyst Ratings",
+                                'url': f"https://finance.yahoo.com/quote/{ticker}/analysis",
+                                'description': "Professional analyst recommendations and targets"
+                            },
+                            {
+                                'name': "👔 MarketWatch Analyst Ratings",
+                                'url': f"https://www.marketwatch.com/investing/stock/{ticker}/analystestimates",
+                                'description': "Analyst estimates and ratings"
+                            },
+                            {
+                                'name': "👔 Finviz Rankings (Free)",
+                                'url': f"https://finviz.com/quote.ashx?t={ticker}",
+                                'description': "Financial metrics and rankings"
+                            }
+                        ])
                     
                     # Options data
                     if show_ml and ml_prediction:
-                        sources_used.append("📊 Options Flow Data")
+                        sources_with_links.append({
+                            'name': "📊 Options Flow Data",
+                            'url': f"https://finance.yahoo.com/quote/{ticker}/options",
+                            'description': "Options trading activity and sentiment"
+                        })
                     
                     # Institutional data
                     if show_ml and ml_prediction:
-                        sources_used.append("🏛️ Institutional Holdings")
+                        sources_with_links.append({
+                            'name': "🏛️ Institutional Holdings",
+                            'url': f"https://finance.yahoo.com/quote/{ticker}/holders",
+                            'description': "Institutional ownership and insider trading"
+                        })
                     
                     # Economic data
                     if show_ml and ml_prediction:
-                        sources_used.append("🌍 Economic Indicators (VIX, Treasury Yields, Dollar Index)")
+                        sources_with_links.append({
+                            'name': "🌍 Economic Indicators (VIX, Treasury Yields, Dollar Index)",
+                            'url': "https://finance.yahoo.com/markets/indices",
+                            'description': "Macroeconomic indicators and market sentiment"
+                        })
+                    
+                    # Stock rankings data
+                    if show_ml and ml_prediction:
+                        sources_with_links.extend([
+                            {
+                                'name': "🏆 Finviz Stock Rankings (Free)",
+                                'url': f"https://finviz.com/quote.ashx?t={ticker}",
+                                'description': "Comprehensive stock rankings and metrics"
+                            },
+                            {
+                                'name': "🏆 MarketWatch Rankings (Free)",
+                                'url': f"https://www.marketwatch.com/investing/stock/{ticker}",
+                                'description': "Market performance rankings"
+                            },
+                            {
+                                'name': "🏆 Sector Performance Analysis",
+                                'url': f"https://finance.yahoo.com/sector/technology",
+                                'description': "Sector relative performance analysis"
+                            },
+                            {
+                                'name': "🏆 Relative Strength Rankings",
+                                'url': f"https://finviz.com/screener.ashx?v=111&f=cap_largeover",
+                                'description': "Relative strength vs market and peers"
+                            }
+                        ])
                     
                     # Alternative data
                     if show_ml and ml_prediction:
-                        sources_used.append("🔍 Alternative Data (Google Trends, Web Traffic)")
+                        sources_with_links.append({
+                            'name': "🔍 Alternative Data Sources",
+                            'url': "#",
+                            'description': "Additional market intelligence and alternative data"
+                        })
                     
-                    # Display sources in compact format
-                    col1, col2 = st.columns(2)
+                    # Display sources with clickable links
+                    st.markdown("### 🔗 Data Sources & Links")
+                    
+                    # Create expandable sections for different categories
+                    categories = {
+                        "📈 Market Data": [s for s in sources_with_links if "Yahoo Finance" in s['name'] or "Market Data" in s['name']],
+                        "📰 News Sources": [s for s in sources_with_links if "📰" in s['name']],
+                        "🐦 Social Media": [s for s in sources_with_links if "🐦" in s['name']],
+                        "👔 Analyst Data": [s for s in sources_with_links if "👔" in s['name']],
+                        "📊 Advanced Data": [s for s in sources_with_links if any(x in s['name'] for x in ["📊", "🏛️", "🌍", "🏆", "🔍"])]
+                    }
+                    
+                    for category, sources in categories.items():
+                        if sources:
+                            with st.expander(f"{category} ({len(sources)} sources)", expanded=False):
+                                for source in sources:
+                                    col1, col2 = st.columns([3, 1])
+                                    with col1:
+                                        if source['url'] != "#":
+                                            st.markdown(f"**{source['name']}** - {source['description']}")
+                                        else:
+                                            st.markdown(f"**{source['name']}** - {source['description']}")
+                                    with col2:
+                                        if source['url'] != "#":
+                                            st.markdown(f"[🔗 Visit]({source['url']})")
+                                        else:
+                                            st.markdown("🔗 N/A")
+                    
+                    # Quick access section
+                    st.markdown("### ⚡ Quick Access")
+                    col1, col2, col3 = st.columns(3)
+                    
                     with col1:
-                        st.markdown("**Primary Sources:**")
-                        for source in sources_used[:len(sources_used)//2 + 1]:
-                            st.markdown(f"• {source}")
+                        st.markdown(f"**[📈 {ticker} on Yahoo Finance](https://finance.yahoo.com/quote/{ticker})**")
+                        st.markdown(f"**[📊 {ticker} Analysis](https://finance.yahoo.com/quote/{ticker}/analysis)**")
                     
                     with col2:
-                        st.markdown("**Additional Sources:**")
-                        for source in sources_used[len(sources_used)//2 + 1:]:
-                            st.markdown(f"• {source}")
+                        st.markdown(f"**[🏆 {ticker} on Finviz](https://finviz.com/quote.ashx?t={ticker})**")
+                        st.markdown(f"**[📰 {ticker} News](https://news.google.com/rss/search?q={ticker}+stock)**")
+                    
+                    with col3:
+                        st.markdown(f"**[🐦 {ticker} on StockTwits](https://stocktwits.com/symbol/{ticker})**")
+                        st.markdown(f"**[📊 {ticker} Options](https://finance.yahoo.com/quote/{ticker}/options)**")
                     
                     # Data freshness
-                    st.markdown(f"**📅 Data Freshness:** Real-time market data, Latest news sentiment, Current analyst ratings")
-                    st.markdown(f"**🔄 Update Frequency:** Market data updates continuously, News sentiment refreshed on analysis")
+                    st.markdown("---")
+                    st.markdown("**📅 Data Freshness:** Real-time market data, Latest news sentiment, Current analyst ratings")
+                    st.markdown("**🔄 Update Frequency:** Market data updates continuously, News sentiment refreshed on analysis")
                 
             else:
                 st.error(f"❌ No data available for {ticker}")
@@ -602,7 +936,7 @@ if analyze_clicked and ticker:
 else:
     # Welcome message
     st.markdown("""
-    ## Welcome to the Professional Stock Analyzer! 🏆
+    ## Welcome to the Stock Analyzer! 🏆
     
     ### How to Use:
     1. **Enter a stock ticker** in the sidebar (e.g., AAPL, TSLA, MSFT)
