@@ -107,7 +107,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Main Header
-st.markdown('<div class="main-header">🏆 Stock Analyzer</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🏆 Professional Stock Analyzer</div>', unsafe_allow_html=True)
 
 # Sidebar for controls
 with st.sidebar:
@@ -936,7 +936,7 @@ if analyze_clicked and ticker:
 else:
     # Welcome message
     st.markdown("""
-    ## Welcome to the Stock Analyzer! 🏆
+    ## Welcome to the Professional Stock Analyzer! 🏆
     
     ### How to Use:
     1. **Enter a stock ticker** in the sidebar (e.g., AAPL, TSLA, MSFT)
