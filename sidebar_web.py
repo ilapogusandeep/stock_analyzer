@@ -86,16 +86,26 @@ with tb_run:
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-if not run:
+# Auto-analyze on selection change: once the user has run analysis at
+# least once, picking a different ticker should fire off a new run
+# without an extra button click. The button is still useful for
+# forcing a re-run on the same ticker (e.g. refresh data).
+if "last_analyzed_ticker" not in st.session_state:
+    st.session_state.last_analyzed_ticker = None
+
+selected_changed = (
+    bool(ticker)
+    and st.session_state.last_analyzed_ticker is not None
+    and ticker != st.session_state.last_analyzed_ticker
+)
+should_analyze = bool(ticker) and (run or selected_changed)
+
+if not should_analyze:
     st.markdown(
         '<div class="hb"><div><div class="hb-tkr">📈 StockIQ</div>'
-        '<div class="hb-co">Enter a ticker above and hit Analyze — everything renders on one page.</div></div></div>',
+        '<div class="hb-co">Pick a ticker above and hit Analyze — afterward, selecting a different ticker auto-runs.</div></div></div>',
         unsafe_allow_html=True,
     )
-    st.stop()
-
-if not ticker:
-    st.warning("Enter a ticker.")
     st.stop()
 
 
@@ -118,6 +128,9 @@ with st.spinner(f"Analyzing {ticker}…"):
 if not data:
     st.error(f"No data for {ticker}.")
     st.stop()
+
+# Remember what we analyzed so the next selection change can auto-fire.
+st.session_state.last_analyzed_ticker = ticker
 
 hist = data["hist"]
 info = data.get("info", {}) or {}

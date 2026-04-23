@@ -11,7 +11,7 @@ DENSE_DARK_CSS = """
       color: #e6ebff;
   }
   section.main > div.block-container {
-      padding: 0.5rem 1.1rem 1rem 1.1rem;
+      padding: 0.1rem 1.1rem 1rem 1.1rem !important;
       max-width: 1900px;
   }
   .block-container h1, .block-container h2, .block-container h3 {
@@ -21,9 +21,22 @@ DENSE_DARK_CSS = """
   .block-container [data-testid="stVerticalBlock"] { gap: 0.45rem; }
   .block-container [data-testid="stHorizontalBlock"] { gap: 0.6rem; }
 
-  /* Hide Streamlit's "deploy" band and default page header */
-  header[data-testid="stHeader"] { background: transparent; height: 0; }
+  /* ===== Squash the top — pull content to the very top of the viewport ===== */
+  header[data-testid="stHeader"],
+  .stApp > header,
+  [data-testid="stToolbar"],
+  [data-testid="stDecoration"],
+  [data-testid="stStatusWidget"] {
+      display: none !important;
+      height: 0 !important;
+      min-height: 0 !important;
+  }
   #MainMenu, footer { visibility: hidden; }
+  /* Streamlit wraps the app in a <section data-testid="stMain"> that has its
+     own top padding via an emotion class — zero it out. */
+  section[data-testid="stMain"] { padding-top: 0 !important; }
+  section[data-testid="stMain"] > div:first-child { padding-top: 0 !important; }
+  .stApp { padding-top: 0 !important; }
 
   /* ===== Kill the sidebar ===== */
   [data-testid="stSidebar"],
