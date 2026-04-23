@@ -4,7 +4,7 @@ DENSE_DARK_CSS = """
 <style>
   /* ===== Global ===== */
   html, body, [data-testid="stAppViewContainer"] {
-      font-size: 13px;
+      font-size: 14px;
   }
   .stApp {
       background: linear-gradient(180deg, #0a0f24 0%, #0f1530 100%);
@@ -67,28 +67,28 @@ DENSE_DARK_CSS = """
       padding: 10px 16px;
       margin-bottom: 8px;
   }
-  .hb-tkr { font-size: 2rem; font-weight: 800; color: #fff; letter-spacing: 0.03em; line-height: 1; }
-  .hb-co  { color: #a5b4fc; font-size: 0.78rem; margin-top: 2px; }
-  .hb-px  { font-size: 1.7rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
-  .hb-chg { font-size: 0.82rem; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .hb-tkr { font-size: 2.1rem; font-weight: 800; color: #fff; letter-spacing: 0.03em; line-height: 1; }
+  .hb-co  { color: #a5b4fc; font-size: 0.85rem; margin-top: 2px; }
+  .hb-px  { font-size: 1.8rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
+  .hb-chg { font-size: 0.9rem; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; }
   .up     { color: #22c55e; }
   .down   { color: #ef4444; }
   .flat   { color: #cbd5e1; }
 
   .pill {
-      display: inline-block; padding: 5px 12px; border-radius: 999px;
-      font-weight: 700; font-size: 0.82rem; letter-spacing: 0.04em;
+      display: inline-block; padding: 6px 14px; border-radius: 999px;
+      font-weight: 700; font-size: 0.9rem; letter-spacing: 0.04em;
   }
   .pill-bull { background: rgba(34,197,94,0.18); color: #4ade80; border: 1px solid rgba(34,197,94,0.5); }
   .pill-bear { background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.5); }
   .pill-flat { background: rgba(148,163,184,0.18); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.5); }
-  .hb-sub  { font-size: 0.65rem; color: #94a3b8; margin-top: 2px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .hb-sub  { font-size: 0.7rem; color: #94a3b8; margin-top: 2px; letter-spacing: 0.08em; text-transform: uppercase; }
 
   .hb-ctx {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
   }
-  .hb-ctx-l { font-size: 0.62rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
-  .hb-ctx-v { font-size: 0.92rem; color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hb-ctx-l { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+  .hb-ctx-v { font-size: 1rem; color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
 
   /* ===== Panel ===== */
   .panel {
@@ -99,19 +99,19 @@ DENSE_DARK_CSS = """
   }
   .panel-h {
       display: flex; align-items: center; justify-content: space-between;
-      font-size: 0.68rem; font-weight: 700; color: #a5b4fc;
+      font-size: 0.75rem; font-weight: 700; color: #a5b4fc;
       text-transform: uppercase; letter-spacing: 0.1em;
       margin: 0 0 6px 0;
       padding-bottom: 4px;
       border-bottom: 1px solid rgba(148,163,255,0.12);
   }
-  .panel-h .panel-h-sub { color: #64748b; font-size: 0.6rem; letter-spacing: 0.08em; font-weight: 500; }
+  .panel-h .panel-h-sub { color: #64748b; font-size: 0.68rem; letter-spacing: 0.08em; font-weight: 500; }
 
   /* Two-column key:value stats list */
   .kv {
       display: grid; grid-template-columns: 1fr auto;
-      gap: 4px 12px;
-      font-size: 0.82rem;
+      gap: 5px 14px;
+      font-size: 0.9rem;
   }
   .kv .k { color: #94a3b8; }
   .kv .v { color: #f1f5f9; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
@@ -120,12 +120,12 @@ DENSE_DARK_CSS = """
 
   /* Probability bars */
   .pb-row {
-      display: grid; grid-template-columns: 64px 1fr 52px; gap: 8px;
-      align-items: center; font-size: 0.75rem; margin: 2px 0;
+      display: grid; grid-template-columns: 70px 1fr 56px; gap: 8px;
+      align-items: center; font-size: 0.82rem; margin: 3px 0;
   }
   .pb-label { color: #cbd5e1; font-weight: 600; }
   .pb-bar {
-      height: 10px; border-radius: 999px; background: rgba(148,163,255,0.08);
+      height: 11px; border-radius: 999px; background: rgba(148,163,255,0.08);
       overflow: hidden;
   }
   .pb-fill { height: 100%; border-radius: 999px; }
@@ -136,8 +136,8 @@ DENSE_DARK_CSS = """
 
   /* Scenario row */
   .scen {
-      display: grid; grid-template-columns: 70px 1fr 1fr; gap: 8px;
-      font-size: 0.78rem; padding: 3px 0; border-bottom: 1px dashed rgba(148,163,255,0.08);
+      display: grid; grid-template-columns: 74px 1fr 1fr; gap: 8px;
+      font-size: 0.85rem; padding: 4px 0; border-bottom: 1px dashed rgba(148,163,255,0.08);
   }
   .scen:last-child { border-bottom: none; }
   .scen .l { color: #cbd5e1; font-weight: 600; }
@@ -145,12 +145,12 @@ DENSE_DARK_CSS = """
 
   /* Performance bars */
   .perf {
-      display: grid; grid-template-columns: 36px 1fr 56px; gap: 8px;
-      align-items: center; font-size: 0.74rem; margin: 2px 0;
+      display: grid; grid-template-columns: 38px 1fr 60px; gap: 8px;
+      align-items: center; font-size: 0.82rem; margin: 3px 0;
   }
   .perf .pl { color: #94a3b8; font-weight: 600; }
   .perf .pv { color: #f1f5f9; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .perf-track { position: relative; height: 8px; background: rgba(148,163,255,0.06); border-radius: 999px; }
+  .perf-track { position: relative; height: 9px; background: rgba(148,163,255,0.06); border-radius: 999px; }
   .perf-track::before {
       content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
       background: rgba(148,163,255,0.25);
@@ -160,13 +160,13 @@ DENSE_DARK_CSS = """
   .perf-fill.neg { background: #ef4444; }
 
   /* Sentiment gauge (compact) */
-  .sent-label { font-size: 0.7rem; color: #94a3b8; }
-  .sent-value { font-size: 1rem; font-weight: 700; color: #fff; }
+  .sent-label { font-size: 0.78rem; color: #94a3b8; }
+  .sent-value { font-size: 1.05rem; font-weight: 700; color: #fff; }
 
   /* Footer strip */
   .footer {
       margin-top: 10px;
-      font-size: 0.7rem; color: #64748b;
+      font-size: 0.78rem; color: #64748b;
       text-align: center;
       padding: 6px 0;
       border-top: 1px solid rgba(148,163,255,0.1);
