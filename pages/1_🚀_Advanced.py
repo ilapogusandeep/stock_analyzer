@@ -380,8 +380,8 @@ with tabs[3]:
                     text=[f"{v:.3f}" for v in vals],
                     textposition="outside",
                 ))
-                fig.update_layout(**DARK_LAYOUT, height=320, yaxis=dict(autorange="reversed",
-                                  gridcolor="rgba(148,163,255,0.12)"))
+                fig.update_layout(**DARK_LAYOUT, height=320)
+                fig.update_yaxes(autorange="reversed")
                 st.plotly_chart(fig, width="stretch")
             except Exception as e:
                 st.caption(f"Could not render features: {e}")

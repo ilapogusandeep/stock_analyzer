@@ -1184,68 +1184,72 @@ class UniversalStockAnalyzer:
             features['price_ma5_ratio'] = hist['Close'] / features['sma_5']
             features['price_ma20_ratio'] = hist['Close'] / features['sma_20']
             
-            # Enhanced features from multiple sources
+            # Enhanced features from multiple sources. Use `.get(key) or {}`
+            # (not `.get(key, {})`) so an explicit None value still yields a
+            # dict -- yfinance and some upstream sources return None for
+            # missing sub-documents, which would otherwise crash with
+            # "'NoneType' object has no attribute 'get'".
             if enhanced_data:
                 # News sentiment features
-                news_sentiment = enhanced_data.get('news_sentiment', {})
+                news_sentiment = enhanced_data.get('news_sentiment') or {}
                 features['news_sentiment'] = news_sentiment.get('overall_sentiment', 0)
                 features['news_count'] = news_sentiment.get('news_count', 0)
                 features['news_positive_ratio'] = news_sentiment.get('positive_ratio', 0.5)
                 features['news_confidence'] = news_sentiment.get('confidence', 0)
-                
+
                 # Social sentiment features
-                social_sentiment = enhanced_data.get('social_sentiment', {})
+                social_sentiment = enhanced_data.get('social_sentiment') or {}
                 features['social_sentiment'] = social_sentiment.get('sentiment', 0)
                 features['social_mentions'] = social_sentiment.get('mentions', 0)
                 features['social_engagement'] = social_sentiment.get('engagement_rate', 0)
-                
+
                 # Analyst features
-                analyst_data = enhanced_data.get('analyst_data', {})
+                analyst_data = enhanced_data.get('analyst_data') or {}
                 features['analyst_rating'] = analyst_data.get('rating_mean', 0)
                 features['analyst_upside'] = analyst_data.get('upside_potential', 0)
                 features['analyst_count'] = analyst_data.get('analyst_count', 0)
-                
+
                 # Options features
-                options_data = enhanced_data.get('options_data', {})
+                options_data = enhanced_data.get('options_data') or {}
                 features['put_call_ratio'] = options_data.get('put_call_ratio', 1.0)
                 features['options_volume'] = options_data.get('options_volume', 0)
                 features['implied_volatility'] = options_data.get('implied_volatility', 0.2)
-                
+
                 # Institutional features
-                institutional_data = enhanced_data.get('institutional_data', {})
+                institutional_data = enhanced_data.get('institutional_data') or {}
                 features['institutional_ownership'] = institutional_data.get('ownership_percent', 0)
                 features['institution_count'] = institutional_data.get('institution_count', 0)
-                
+
                 # Economic features
-                economic_data = enhanced_data.get('economic_data', {})
+                economic_data = enhanced_data.get('economic_data') or {}
                 features['vix'] = economic_data.get('vix', 20)
                 features['treasury_yield'] = economic_data.get('treasury_yield', 3.0)
                 features['dollar_index'] = economic_data.get('dollar_index', 100)
-                
+
                 # NEW: Stock Rankings Features
-                stock_rankings = enhanced_data.get('stock_rankings', {})
+                stock_rankings = enhanced_data.get('stock_rankings') or {}
                 if stock_rankings:
                     # Finviz rankings
-                    finviz_data = stock_rankings.get('finviz_rankings', {})
+                    finviz_data = stock_rankings.get('finviz_rankings') or {}
                     features['finviz_pe_ratio'] = self._safe_float(finviz_data.get('pe_ratio', 0))
                     features['finviz_peg_ratio'] = self._safe_float(finviz_data.get('peg_ratio', 0))
                     features['finviz_price_to_sales'] = self._safe_float(finviz_data.get('price_to_sales', 0))
                     features['finviz_debt_to_equity'] = self._safe_float(finviz_data.get('debt_to_equity', 0))
                     features['finviz_roe'] = self._safe_float(finviz_data.get('return_on_equity', 0))
-                    
+
                     # MarketWatch rankings
-                    mw_data = stock_rankings.get('marketwatch_rankings', {})
+                    mw_data = stock_rankings.get('marketwatch_rankings') or {}
                     features['mw_average_rating'] = mw_data.get('average_rating', 0)
                     features['mw_rating_count'] = mw_data.get('rating_count', 0)
-                    
+
                     # Yahoo rankings
-                    yahoo_data = stock_rankings.get('yahoo_rankings', {})
+                    yahoo_data = stock_rankings.get('yahoo_rankings') or {}
                     features['yahoo_recommendation_mean'] = yahoo_data.get('recommendation_mean', 0)
                     features['yahoo_target_mean_price'] = yahoo_data.get('target_mean_price', 0)
                     features['yahoo_analyst_opinions'] = yahoo_data.get('number_of_analyst_opinions', 0)
-                    
+
                     # Sector performance
-                    sector_data = stock_rankings.get('sector_performance', {})
+                    sector_data = stock_rankings.get('sector_performance') or {}
                     features['sector_outperformance'] = sector_data.get('outperformance', 0)
                     features['sector_rank'] = 1 if sector_data.get('sector_rank') == 'Above' else 0
             
