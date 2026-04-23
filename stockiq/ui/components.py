@@ -1,169 +1,236 @@
-"""Reusable UI components for the Advanced view."""
+"""Compact HTML building blocks for the dense single-page UI."""
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterable, Optional, Tuple
 
 import streamlit as st
 
+# ---------------------------------------------------------------------------
+# Formatters
+# ---------------------------------------------------------------------------
 
-def _fmt_price(v: Optional[float]) -> str:
-    return f"${v:,.2f}" if v is not None else "N/A"
+def fmt_price(v: Optional[float]) -> str:
+    return f"${v:,.2f}" if v is not None else "—"
 
 
-def _fmt_pct(v: Optional[float], signed: bool = True) -> str:
+def fmt_pct(v: Optional[float], signed: bool = True, decimals: int = 2) -> str:
     if v is None:
-        return "N/A"
+        return "—"
     sign = "+" if signed and v >= 0 else ""
-    return f"{sign}{v:.2f}%"
+    return f"{sign}{v:.{decimals}f}%"
 
 
-def _fmt_big_money(v: Optional[float]) -> str:
+def fmt_ratio(v: Optional[float], decimals: int = 2) -> str:
     if v is None:
-        return "N/A"
+        return "—"
+    try:
+        return f"{v:.{decimals}f}"
+    except Exception:
+        return str(v)
+
+
+def fmt_pct_ratio(v: Optional[float], decimals: int = 1) -> str:
+    """Format a 0..1 fraction as a percent."""
+    if v is None:
+        return "—"
+    return f"{v*100:.{decimals}f}%"
+
+
+def fmt_big_money(v: Optional[float]) -> str:
+    if v is None or v == 0:
+        return "—"
     for unit, scale in [("T", 1e12), ("B", 1e9), ("M", 1e6), ("K", 1e3)]:
         if abs(v) >= scale:
             return f"${v/scale:.2f}{unit}"
     return f"${v:,.0f}"
 
 
-def _change_class(delta: Optional[float]) -> str:
-    if delta is None:
-        return "adv-change-flat"
-    if delta > 0:
-        return "adv-change-up"
-    if delta < 0:
-        return "adv-change-down"
-    return "adv-change-flat"
+def _cls(v: Optional[float]) -> str:
+    if v is None:
+        return "flat"
+    return "up" if v > 0 else ("down" if v < 0 else "flat")
 
 
-def _pill_class(direction: str) -> str:
-    d = (direction or "").upper()
-    if d == "BULLISH":
-        return "pill-bull"
-    if d == "BEARISH":
-        return "pill-bear"
-    return "pill-flat"
-
+# ---------------------------------------------------------------------------
+# Header band
+# ---------------------------------------------------------------------------
 
 def header_band(ticker: str, data: dict) -> None:
-    """Big top banner: ticker, price, change, recommendation pill, context row."""
     info = data.get("info", {}) or {}
     tech = data.get("tech_data", {}) or {}
-    ml = data.get("ml_prediction") or {}
     fund = data.get("fundamental_data", {}) or {}
+    ml = data.get("ml_prediction") or {}
     earnings = data.get("earnings_data", {}) or {}
 
     price = tech.get("current_price")
     change_pct = tech.get("price_change_pct")
     change_abs = tech.get("price_change")
-    direction = ml.get("direction", "NEUTRAL")
+    direction = (ml.get("direction") or "NEUTRAL").upper()
 
-    change_cls = _change_class(change_pct)
-    pill_cls = _pill_class(direction)
+    pill_cls = {"BULLISH": "pill-bull", "BEARISH": "pill-bear"}.get(direction, "pill-flat")
+    change_cls = _cls(change_pct)
+    arrow = "▲" if (change_pct or 0) > 0 else ("▼" if (change_pct or 0) < 0 else "■")
 
-    market_cap = _fmt_big_money(fund.get("market_cap"))
-    sector = info.get("sector") or "—"
-    price_target = ml.get("price_target")
-    target_txt = _fmt_price(price_target) if price_target else "—"
+    target = ml.get("price_target")
+    target_pct = None
+    if target and price:
+        target_pct = (target / price - 1) * 100
 
     earnings_txt = "—"
     if earnings.get("earnings_expected") and earnings.get("next_earnings_date"):
-        d = earnings["next_earnings_date"]
         try:
-            earnings_txt = f"{d.strftime('%b %d')} ({earnings.get('days_to_earnings', '?')}d)"
+            earnings_txt = f"{earnings['next_earnings_date'].strftime('%b %d')} · {earnings.get('days_to_earnings', '?')}d"
         except Exception:
-            earnings_txt = "Scheduled"
+            earnings_txt = "scheduled"
 
-    change_sign = "▲" if (change_pct or 0) > 0 else ("▼" if (change_pct or 0) < 0 else "■")
+    company = info.get("longName") or info.get("shortName") or ""
+    sector = info.get("sector") or "—"
 
     html = f"""
-    <div class="adv-header">
-      <div style="flex: 1 1 200px;">
-        <div class="adv-ticker">{ticker}</div>
-        <div class="adv-company">{info.get('longName', '')}</div>
+    <div class="hb">
+      <div>
+        <div class="hb-tkr">{ticker}</div>
+        <div class="hb-co">{company}</div>
       </div>
-      <div style="flex: 1 1 240px;">
-        <div class="adv-price">{_fmt_price(price)}</div>
-        <div class="{change_cls}">{change_sign} {_fmt_price(abs(change_abs)) if change_abs is not None else ''} &nbsp; {_fmt_pct(change_pct)}</div>
+      <div>
+        <div class="hb-px">{fmt_price(price)}</div>
+        <div class="hb-chg {change_cls}">{arrow} {fmt_price(abs(change_abs)) if change_abs is not None else '—'} &nbsp; {fmt_pct(change_pct)}</div>
       </div>
-      <div style="flex: 0 0 auto;">
-        <div class="adv-pill {pill_cls}">{direction}</div>
-        <div class="adv-sub">Model signal</div>
+      <div>
+        <span class="pill {pill_cls}">{direction}</span>
+        <div class="hb-sub">model signal</div>
       </div>
-      <div style="flex: 1 1 360px; display:flex; gap:22px; flex-wrap:wrap;">
-        <div><div class="adv-metric-label">Market Cap</div><div class="adv-metric-value" style="font-size:1.05rem">{market_cap}</div></div>
-        <div><div class="adv-metric-label">Sector</div><div class="adv-metric-value" style="font-size:1.05rem">{sector}</div></div>
-        <div><div class="adv-metric-label">Price Target</div><div class="adv-metric-value" style="font-size:1.05rem">{target_txt}</div></div>
-        <div><div class="adv-metric-label">Next Earnings</div><div class="adv-metric-value" style="font-size:1.05rem">{earnings_txt}</div></div>
+      <div class="hb-ctx">
+        <div>
+          <div class="hb-ctx-l">Market Cap</div>
+          <div class="hb-ctx-v">{fmt_big_money(fund.get('market_cap'))}</div>
+        </div>
+        <div>
+          <div class="hb-ctx-l">Sector</div>
+          <div class="hb-ctx-v" style="font-size:0.8rem;font-weight:500;">{sector}</div>
+        </div>
+        <div>
+          <div class="hb-ctx-l">Price Target</div>
+          <div class="hb-ctx-v">{fmt_price(target)}{f' <span class="{_cls(target_pct)}" style="font-size:0.7rem;font-weight:500;">({fmt_pct(target_pct, decimals=1)})</span>' if target_pct is not None else ''}</div>
+        </div>
+        <div>
+          <div class="hb-ctx-l">Next Earnings</div>
+          <div class="hb-ctx-v" style="font-size:0.8rem;">{earnings_txt}</div>
+        </div>
       </div>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
 
 
-def metric_card(label: str, value: str, delta: Optional[str] = None, delta_color: str = "neutral") -> None:
-    """Dark-themed metric card rendered inside whatever column it's called in."""
-    delta_html = ""
-    if delta:
-        color_cls = {"up": "adv-change-up", "down": "adv-change-down"}.get(delta_color, "adv-change-flat")
-        delta_html = f'<div class="adv-metric-delta {color_cls}">{delta}</div>'
-    st.markdown(
-        f'<div class="adv-metric"><div class="adv-metric-label">{label}</div>'
-        f'<div class="adv-metric-value">{value}</div>{delta_html}</div>',
-        unsafe_allow_html=True,
+# ---------------------------------------------------------------------------
+# Panels / stats
+# ---------------------------------------------------------------------------
+
+def panel_open(title: str, sub: str = "") -> str:
+    sub_html = f'<span class="panel-h-sub">{sub}</span>' if sub else ""
+    return f'<div class="panel"><div class="panel-h"><span>{title}</span>{sub_html}</div>'
+
+
+def panel_close() -> str:
+    return "</div>"
+
+
+def kv_block(title: str, rows: Iterable[Tuple[str, str]], sub: str = "") -> None:
+    """Render a titled panel with a two-column key:value list."""
+    body = "".join(
+        f'<div class="k">{k}</div><div class="v">{v}</div>' for k, v in rows
     )
+    html = panel_open(title, sub) + f'<div class="kv">{body}</div>' + panel_close()
+    st.markdown(html, unsafe_allow_html=True)
 
 
-def section(title: str) -> None:
-    st.markdown(f'<div class="adv-h3">{title}</div>', unsafe_allow_html=True)
+def probability_bars(probs: dict, title: str = "Scenario probability") -> None:
+    """Horizontal bullish/neutral/bearish probability bars."""
+    bull = max(0.0, min(1.0, float(probs.get("bullish", 0) or 0)))
+    neut = max(0.0, min(1.0, float(probs.get("neutral", 0) or 0)))
+    bear = max(0.0, min(1.0, float(probs.get("bearish", 0) or 0)))
 
-
-def probability_gauge(prob: float, label: str, color: str) -> "object":
-    """Return a Plotly gauge figure for a 0..1 probability."""
-    import plotly.graph_objects as go
-
-    pct = max(0.0, min(1.0, float(prob or 0))) * 100
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=pct,
-            number={"suffix": "%", "font": {"color": "#ffffff", "size": 28}},
-            gauge={
-                "axis": {"range": [0, 100], "tickcolor": "#94a3b8", "tickfont": {"color": "#94a3b8"}},
-                "bar": {"color": color, "thickness": 0.25},
-                "bgcolor": "rgba(255,255,255,0.03)",
-                "borderwidth": 0,
-                "steps": [
-                    {"range": [0, 33], "color": "rgba(148,163,184,0.08)"},
-                    {"range": [33, 66], "color": "rgba(148,163,184,0.14)"},
-                    {"range": [66, 100], "color": "rgba(148,163,184,0.22)"},
-                ],
-            },
-            title={"text": label, "font": {"color": "#e0e7ff", "size": 14}},
+    rows = [
+        ("Bullish", bull, "pb-bull"),
+        ("Neutral", neut, "pb-neut"),
+        ("Bearish", bear, "pb-bear"),
+    ]
+    body = ""
+    for label, v, cls in rows:
+        pct = v * 100
+        body += (
+            f'<div class="pb-row">'
+            f'<div class="pb-label">{label}</div>'
+            f'<div class="pb-bar"><div class="pb-fill {cls}" style="width:{pct:.1f}%"></div></div>'
+            f'<div class="pb-val">{pct:.1f}%</div>'
+            f'</div>'
         )
-    )
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        font={"color": "#e0e7ff"},
-        height=220,
-        margin=dict(l=10, r=10, t=40, b=10),
-    )
-    return fig
+    st.markdown(panel_open(title) + body + panel_close(), unsafe_allow_html=True)
 
 
-def sparkline(series) -> "object":
-    """Tiny price sparkline for the header (optional use)."""
-    import plotly.graph_objects as go
+def scenario_block(targets: dict, current: Optional[float]) -> None:
+    def _row(label, v, cls):
+        if v is None or current is None:
+            return f'<div class="scen"><div class="l {cls}">{label}</div><div class="p">—</div><div class="p">—</div></div>'
+        pct = (v / current - 1) * 100
+        pct_cls = _cls(pct)
+        return (
+            f'<div class="scen">'
+            f'<div class="l {cls}">{label}</div>'
+            f'<div class="p">{fmt_price(v)}</div>'
+            f'<div class="p {pct_cls}">{fmt_pct(pct, decimals=1)}</div>'
+            f'</div>'
+        )
 
-    fig = go.Figure(go.Scatter(y=list(series), mode="lines", line=dict(color="#6366f1", width=2)))
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
-        height=60,
-        margin=dict(l=0, r=0, t=0, b=0),
-        showlegend=False,
-    )
-    return fig
+    body = "".join([
+        _row("Bullish", targets.get("bullish"), "up"),
+        _row("Neutral", targets.get("neutral"), "flat"),
+        _row("Bearish", targets.get("bearish"), "down"),
+    ])
+    st.markdown(panel_open("Price scenarios", "12m horizon") + body + panel_close(),
+                unsafe_allow_html=True)
+
+
+def performance_bars(tech: dict) -> None:
+    periods = [
+        ("1D", tech.get("performance_1d")),
+        ("5D", tech.get("performance_5d")),
+        ("1M", tech.get("performance_1m")),
+        ("3M", tech.get("performance_3m")),
+        ("1Y", tech.get("performance_1y")),
+    ]
+    vals = [v for _, v in periods if v is not None]
+    extent = max((abs(v) for v in vals), default=10)
+    extent = max(extent, 5)  # at least 5% for visual scale
+
+    body = ""
+    for label, v in periods:
+        if v is None:
+            body += (
+                f'<div class="perf">'
+                f'<div class="pl">{label}</div>'
+                f'<div class="perf-track"></div>'
+                f'<div class="pv">—</div>'
+                f'</div>'
+            )
+            continue
+        width_pct = min(abs(v) / extent * 50, 50)  # 50% = half the track
+        if v >= 0:
+            left = 50
+            cls = "pos"
+        else:
+            left = 50 - width_pct
+            cls = "neg"
+        body += (
+            f'<div class="perf">'
+            f'<div class="pl">{label}</div>'
+            f'<div class="perf-track">'
+            f'<div class="perf-fill {cls}" style="left:{left}%;width:{width_pct}%"></div>'
+            f'</div>'
+            f'<div class="pv {_cls(v)}">{fmt_pct(v, decimals=1)}</div>'
+            f'</div>'
+        )
+    st.markdown(panel_open("Performance", "vs today") + body + panel_close(),
+                unsafe_allow_html=True)
