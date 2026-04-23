@@ -121,7 +121,7 @@ with st.sidebar:
     show_backtest = st.checkbox("📊 Backtest", value=True, help="Show backtesting results")
     
     # Analyze button
-    analyze_clicked = st.button("🚀 Analyze Stock", type="primary", use_container_width=True)
+    analyze_clicked = st.button("🚀 Analyze Stock", type="primary", width='stretch')
     
     st.markdown("---")
     
@@ -192,7 +192,7 @@ if analyze_clicked and ticker:
                                 from stock_analyzer import create_charts
                                 charts = create_charts(data)
                                 if 'price' in charts:
-                                    st.plotly_chart(charts['price'], use_container_width=True)
+                                    st.plotly_chart(charts['price'], width='stretch')
                             except Exception as e:
                                 st.warning(f"Charts not available: {str(e)}")
                         else:
@@ -370,7 +370,7 @@ if analyze_clicked and ticker:
                                     'Change': f"{change_indicator}{change_str}"
                                 })
                             
-                            st.dataframe(table_data, use_container_width=True, hide_index=True)
+                            st.dataframe(table_data, width='stretch', hide_index=True)
                         
                         # Insider Trading Table
                         transactions = institutional_data.get('insider_transactions', {}).get('recent_transactions', [])
@@ -388,7 +388,7 @@ if analyze_clicked and ticker:
                                     'Value': f"${transaction['value']:,.0f}" if transaction.get('value', 0) > 0 else 'N/A'
                                 })
                             
-                            st.dataframe(insider_data, use_container_width=True, hide_index=True)
+                            st.dataframe(insider_data, width='stretch', hide_index=True)
                 
                 # Earnings History - Separate Section
                 if institutional_data:
@@ -462,7 +462,7 @@ if analyze_clicked and ticker:
                                     })
                                 
                                 # Use st.dataframe instead of st.table to remove row numbers
-                                st.dataframe(earnings_data, use_container_width=True, hide_index=True)
+                                st.dataframe(earnings_data, width='stretch', hide_index=True)
                 
                 # Enhanced Price Prediction - Collapsible
                 if show_ml:

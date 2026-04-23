@@ -1250,7 +1250,7 @@ class UniversalStockAnalyzer:
                     features['sector_rank'] = 1 if sector_data.get('sector_rank') == 'Above' else 0
             
             # Fill NaN values
-            features = features.fillna(method='ffill').fillna(0)
+            features = features.ffill().fillna(0)
             
             return features
             
@@ -1943,7 +1943,7 @@ def web_interface():
                         if 'price' in charts:
                             # Make chart smaller for one-pager
                             charts['price'].update_layout(height=200, margin=dict(l=0, r=0, t=20, b=0))
-                            st.plotly_chart(charts['price'], use_container_width=True)
+                            st.plotly_chart(charts['price'], width='stretch')
                     
                     # Analysis Row: Technical + ML + Sentiment
                     col1, col2, col3 = st.columns(3)
