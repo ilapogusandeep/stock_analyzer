@@ -4,7 +4,7 @@ DENSE_DARK_CSS = """
 <style>
   /* ===== Global ===== */
   html, body, [data-testid="stAppViewContainer"] {
-      font-size: 14px;
+      font-size: 15px;
   }
   .stApp {
       background: linear-gradient(180deg, #0a0f24 0%, #0f1530 100%);
@@ -90,12 +90,40 @@ DENSE_DARK_CSS = """
   .hb-ctx-l { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
   .hb-ctx-v { font-size: 1rem; color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
 
+  /* ===== External links row ===== */
+  .ext-row {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 8px 2px 2px 2px;
+      margin-bottom: 8px;
+  }
+  .ext-label {
+      font-size: 0.72rem; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin-right: 4px;
+  }
+  a.ext-link {
+      display: inline-block;
+      padding: 5px 10px;
+      font-size: 0.82rem;
+      color: #cbd5e1 !important;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(148,163,255,0.18);
+      border-radius: 6px;
+      text-decoration: none !important;
+      transition: background 0.1s ease, border-color 0.1s ease;
+  }
+  a.ext-link:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(148,163,255,0.4);
+      color: #fff !important;
+  }
+
   /* ===== Panel ===== */
   .panel {
       background: rgba(255,255,255,0.025);
       border: 1px solid rgba(148,163,255,0.18);
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 12px 14px;
   }
   .panel-h {
       display: flex; align-items: center; justify-content: space-between;
@@ -110,8 +138,8 @@ DENSE_DARK_CSS = """
   /* Two-column key:value stats list */
   .kv {
       display: grid; grid-template-columns: 1fr auto;
-      gap: 5px 14px;
-      font-size: 0.9rem;
+      gap: 8px 16px;
+      font-size: 0.95rem;
   }
   .kv .k { color: #94a3b8; }
   .kv .v { color: #f1f5f9; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
@@ -120,12 +148,12 @@ DENSE_DARK_CSS = """
 
   /* Probability bars */
   .pb-row {
-      display: grid; grid-template-columns: 70px 1fr 56px; gap: 8px;
-      align-items: center; font-size: 0.82rem; margin: 3px 0;
+      display: grid; grid-template-columns: 74px 1fr 58px; gap: 10px;
+      align-items: center; font-size: 0.88rem; margin: 6px 0;
   }
   .pb-label { color: #cbd5e1; font-weight: 600; }
   .pb-bar {
-      height: 11px; border-radius: 999px; background: rgba(148,163,255,0.08);
+      height: 12px; border-radius: 999px; background: rgba(148,163,255,0.08);
       overflow: hidden;
   }
   .pb-fill { height: 100%; border-radius: 999px; }
@@ -136,8 +164,8 @@ DENSE_DARK_CSS = """
 
   /* Scenario row */
   .scen {
-      display: grid; grid-template-columns: 74px 1fr 1fr; gap: 8px;
-      font-size: 0.85rem; padding: 4px 0; border-bottom: 1px dashed rgba(148,163,255,0.08);
+      display: grid; grid-template-columns: 80px 1fr 1fr; gap: 10px;
+      font-size: 0.9rem; padding: 6px 0; border-bottom: 1px dashed rgba(148,163,255,0.08);
   }
   .scen:last-child { border-bottom: none; }
   .scen .l { color: #cbd5e1; font-weight: 600; }
@@ -145,12 +173,12 @@ DENSE_DARK_CSS = """
 
   /* Performance bars */
   .perf {
-      display: grid; grid-template-columns: 38px 1fr 60px; gap: 8px;
-      align-items: center; font-size: 0.82rem; margin: 3px 0;
+      display: grid; grid-template-columns: 42px 1fr 64px; gap: 10px;
+      align-items: center; font-size: 0.88rem; margin: 6px 0;
   }
   .perf .pl { color: #94a3b8; font-weight: 600; }
   .perf .pv { color: #f1f5f9; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-  .perf-track { position: relative; height: 9px; background: rgba(148,163,255,0.06); border-radius: 999px; }
+  .perf-track { position: relative; height: 10px; background: rgba(148,163,255,0.06); border-radius: 999px; }
   .perf-track::before {
       content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
       background: rgba(148,163,255,0.25);

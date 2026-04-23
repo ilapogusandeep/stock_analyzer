@@ -125,6 +125,36 @@ def header_band(ticker: str, data: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# External links row
+# ---------------------------------------------------------------------------
+
+def external_links(ticker: str, info: dict) -> None:
+    """Small row of click-through research links for the selected ticker."""
+    website = info.get("website") or ""
+    website_link = (
+        f'<a class="ext-link" href="{website}" target="_blank" rel="noopener">🌐 Website</a>'
+        if website else ""
+    )
+    links = [
+        ("Yahoo Finance",  f"https://finance.yahoo.com/quote/{ticker}"),
+        ("Finviz",         f"https://finviz.com/quote.ashx?t={ticker}"),
+        ("TradingView",    f"https://www.tradingview.com/symbols/{ticker}/"),
+        ("Stock Analysis", f"https://stockanalysis.com/stocks/{ticker.lower()}/"),
+        ("SEC Filings",    f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}&type=10-K"),
+        ("Google News",    f"https://www.google.com/search?q={ticker}+stock&tbm=nws"),
+        ("Seeking Alpha",  f"https://seekingalpha.com/symbol/{ticker}"),
+    ]
+    anchors = "".join(
+        f'<a class="ext-link" href="{url}" target="_blank" rel="noopener">{label}</a>'
+        for label, url in links
+    )
+    st.markdown(
+        f'<div class="ext-row"><span class="ext-label">More</span>{anchors}{website_link}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Panels / stats
 # ---------------------------------------------------------------------------
 

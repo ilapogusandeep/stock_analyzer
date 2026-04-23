@@ -13,7 +13,9 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from stockiq.core.analyzer import UniversalStockAnalyzer
+from stockiq.data.tickers import POPULAR_TICKERS
 from stockiq.ui.components import (
+    external_links,
     fmt_big_money,
     fmt_pct,
     fmt_pct_ratio,
@@ -53,8 +55,8 @@ DARK_LAYOUT = dict(
 # ---------------------------------------------------------------------------
 
 st.markdown('<div class="topbar">', unsafe_allow_html=True)
-tb_logo, tb_tkr, tb_peers, tb_fast, tb_run, tb_spacer = st.columns(
-    [0.11, 0.12, 0.22, 0.10, 0.11, 0.34],
+tb_logo, tb_tkr, tb_fast, tb_run, tb_spacer = st.columns(
+    [0.14, 0.36, 0.10, 0.12, 0.28],
     vertical_alignment="bottom",
 )
 with tb_logo:
@@ -63,13 +65,19 @@ with tb_logo:
         unsafe_allow_html=True,
     )
 with tb_tkr:
-    ticker = st.text_input("Ticker", value="AAPL",
-                           label_visibility="visible").strip().upper()
-with tb_peers:
-    peers_raw = st.text_input(
-        "Peers (comma-sep)", value="MSFT, GOOGL, NVDA",
-        help="Up to 5 peer tickers for the compare row",
+    # Searchable dropdown: type a ticker or company name. accept_new_options
+    # lets users pick any symbol not in POPULAR_TICKERS.
+    ticker_options = sorted(POPULAR_TICKERS.keys())
+    default_ticker = "AAPL" if "AAPL" in ticker_options else ticker_options[0]
+    ticker_raw = st.selectbox(
+        "Ticker / company",
+        options=ticker_options,
+        index=ticker_options.index(default_ticker),
+        format_func=lambda t: f"{t}  —  {POPULAR_TICKERS.get(t.upper(), '')}".rstrip(" —"),
+        accept_new_options=True,
+        help="Type a ticker (AAPL) or company name (Apple) — any symbol works even if not listed.",
     )
+    ticker = (ticker_raw or "").strip().upper()
 with tb_fast:
     fast = st.checkbox("Fast mode", value=False,
                        help="Skip ML + backtest")
@@ -122,10 +130,11 @@ inst = data.get("institutional_data", {}) or {}
 
 
 # ---------------------------------------------------------------------------
-# Header band
+# Header band + external links
 # ---------------------------------------------------------------------------
 
 header_band(ticker, data)
+external_links(ticker, info)
 
 
 # ---------------------------------------------------------------------------
@@ -349,74 +358,6 @@ with c_right:
             + panel_close(),
             unsafe_allow_html=True,
         )
-
-
-# ---------------------------------------------------------------------------
-# Peer comparison (only section that may require scrolling)
-# ---------------------------------------------------------------------------
-
-peers = [t.strip().upper() for t in (peers_raw or "").split(",") if t.strip()]
-peers = [p for p in peers if p and p != ticker][:5]
-if peers:
-    st.markdown('<div style="height: 6px"></div>', unsafe_allow_html=True)
-    peer_l, peer_r = st.columns([0.55, 0.45])
-
-    with st.spinner(f"Loading peers: {', '.join(peers)}…"):
-        import yfinance as yf
-        peer_close: dict[str, pd.Series] = {ticker: hist["Close"]}
-        peer_info: dict[str, dict] = {ticker: info}
-        for p in peers:
-            try:
-                t_obj = yf.Ticker(p)
-                h = t_obj.history(period="1y")
-                if not h.empty:
-                    peer_close[p] = h["Close"]
-                    peer_info[p] = t_obj.info
-            except Exception:
-                pass
-
-    with peer_l:
-        st.markdown(
-            panel_open("Peer — normalized 1Y", "indexed to 100")
-            + '<div style="margin:-4px 0 -8px;">',
-            unsafe_allow_html=True,
-        )
-        fig = go.Figure()
-        palette = ["#6366f1", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4"]
-        for i, (sym, series) in enumerate(peer_close.items()):
-            norm = series / series.iloc[0] * 100
-            fig.add_trace(go.Scatter(
-                x=norm.index, y=norm, name=sym,
-                line=dict(color=palette[i % len(palette)],
-                          width=2.2 if sym == ticker else 1.3),
-            ))
-        fig.update_layout(
-            **DARK_LAYOUT, height=220,
-            legend=dict(bgcolor="rgba(0,0,0,0)", orientation="h",
-                        y=1.18, font=dict(size=9)),
-        )
-        fig.update_xaxes(gridcolor="rgba(148,163,255,0.08)", tickfont=dict(size=9))
-        fig.update_yaxes(gridcolor="rgba(148,163,255,0.08)", tickfont=dict(size=9))
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-        st.markdown("</div>" + panel_close(), unsafe_allow_html=True)
-
-    with peer_r:
-        rows = []
-        for sym, i in peer_info.items():
-            rows.append({
-                "Ticker":  sym,
-                "MCap":    fmt_big_money(i.get("marketCap")),
-                "P/E":     f"{i.get('trailingPE'):.1f}" if i.get("trailingPE") else "—",
-                "Fwd P/E": f"{i.get('forwardPE'):.1f}" if i.get("forwardPE") else "—",
-                "PEG":     f"{i.get('pegRatio'):.2f}" if i.get("pegRatio") else "—",
-                "P/S":     f"{i.get('priceToSalesTrailing12Months'):.2f}" if i.get("priceToSalesTrailing12Months") else "—",
-                "P/B":     f"{i.get('priceToBook'):.1f}" if i.get("priceToBook") else "—",
-                "Beta":    f"{i.get('beta'):.2f}" if i.get("beta") else "—",
-            })
-        df = pd.DataFrame(rows)
-        st.markdown(panel_open("Peer ratios"), unsafe_allow_html=True)
-        st.dataframe(df, width="stretch", hide_index=True, height=240)
-        st.markdown(panel_close(), unsafe_allow_html=True)
 
 
 st.markdown(
