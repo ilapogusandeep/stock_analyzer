@@ -4,33 +4,56 @@ DENSE_DARK_CSS = """
 <style>
   /* ===== Global ===== */
   html, body, [data-testid="stAppViewContainer"] {
-      font-size: 12px;
+      font-size: 13px;
   }
   .stApp {
       background: linear-gradient(180deg, #0a0f24 0%, #0f1530 100%);
       color: #e6ebff;
   }
   section.main > div.block-container {
-      padding: 0.6rem 1rem 1rem 1rem;
-      max-width: 1800px;
+      padding: 0.5rem 1.1rem 1rem 1.1rem;
+      max-width: 1900px;
   }
   .block-container h1, .block-container h2, .block-container h3 {
       margin: 0;
   }
   /* Tighten default Streamlit gaps */
-  .block-container [data-testid="stVerticalBlock"] { gap: 0.4rem; }
-  .block-container [data-testid="stHorizontalBlock"] { gap: 0.5rem; }
+  .block-container [data-testid="stVerticalBlock"] { gap: 0.45rem; }
+  .block-container [data-testid="stHorizontalBlock"] { gap: 0.6rem; }
 
   /* Hide Streamlit's "deploy" band and default page header */
   header[data-testid="stHeader"] { background: transparent; height: 0; }
   #MainMenu, footer { visibility: hidden; }
 
-  /* ===== Sidebar ===== */
-  [data-testid="stSidebar"] {
-      background: #070b1c;
-      border-right: 1px solid rgba(148, 163, 255, 0.15);
+  /* ===== Kill the sidebar ===== */
+  [data-testid="stSidebar"],
+  [data-testid="stSidebarCollapsedControl"],
+  [data-testid="collapsedControl"] { display: none !important; }
+  [data-testid="stAppViewContainer"] > section:first-child { margin-left: 0 !important; }
+
+  /* ===== Top controls bar ===== */
+  .topbar-logo {
+      font-size: 1.15rem; font-weight: 800; color: #fff;
+      letter-spacing: 0.04em;
+      padding-top: 6px;
   }
-  [data-testid="stSidebar"] .block-container { padding: 1rem 0.75rem; }
+  .topbar-logo span { color: #a5b4fc; font-weight: 600; font-size: 0.75rem; margin-left: 4px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  /* Compact Streamlit input controls inside the top bar */
+  .topbar [data-testid="stTextInput"] label,
+  .topbar [data-testid="stCheckbox"] label { font-size: 0.68rem !important; color: #94a3b8 !important;
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px !important; }
+  .topbar [data-testid="stTextInput"] input {
+      background: rgba(255,255,255,0.04); color: #fff;
+      border: 1px solid rgba(148,163,255,0.2); padding: 6px 10px;
+      font-size: 0.85rem; height: 34px;
+  }
+  .topbar [data-testid="stTextInput"] input:focus { border-color: #6366f1; box-shadow: none; }
+  .topbar [data-testid="stButton"] button {
+      height: 34px; margin-top: 18px;
+      font-weight: 700; letter-spacing: 0.04em;
+  }
+  .topbar [data-testid="stCheckbox"] { margin-top: 20px; }
 
   /* ===== Header band ===== */
   .hb {
@@ -72,7 +95,7 @@ DENSE_DARK_CSS = """
       background: rgba(255,255,255,0.025);
       border: 1px solid rgba(148,163,255,0.18);
       border-radius: 8px;
-      padding: 8px 10px;
+      padding: 10px 12px;
   }
   .panel-h {
       display: flex; align-items: center; justify-content: space-between;
@@ -87,8 +110,8 @@ DENSE_DARK_CSS = """
   /* Two-column key:value stats list */
   .kv {
       display: grid; grid-template-columns: 1fr auto;
-      gap: 2px 10px;
-      font-size: 0.78rem;
+      gap: 4px 12px;
+      font-size: 0.82rem;
   }
   .kv .k { color: #94a3b8; }
   .kv .v { color: #f1f5f9; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }

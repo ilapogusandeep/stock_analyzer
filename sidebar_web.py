@@ -37,7 +37,7 @@ st.set_page_config(
     page_title="StockIQ",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 inject_theme()
 
@@ -49,38 +49,39 @@ DARK_LAYOUT = dict(
 )
 
 # ---------------------------------------------------------------------------
-# Sidebar — compact controls
+# Top bar — inline controls (sidebar is hidden via CSS)
 # ---------------------------------------------------------------------------
 
-with st.sidebar:
+st.markdown('<div class="topbar">', unsafe_allow_html=True)
+tb_logo, tb_tkr, tb_peers, tb_fast, tb_run, tb_spacer = st.columns(
+    [0.11, 0.12, 0.22, 0.10, 0.11, 0.34],
+    vertical_alignment="bottom",
+)
+with tb_logo:
     st.markdown(
-        '<div style="font-size:1.25rem;font-weight:800;color:#fff;letter-spacing:0.05em;">'
-        '📈 StockIQ</div>',
+        '<div class="topbar-logo">📈 StockIQ<span>dense one-page analysis</span></div>',
         unsafe_allow_html=True,
     )
-    st.caption("Dense one-page equity analysis")
-    st.markdown("---")
-
-    ticker = st.text_input("Ticker", value="AAPL").strip().upper()
+with tb_tkr:
+    ticker = st.text_input("Ticker", value="AAPL",
+                           label_visibility="visible").strip().upper()
+with tb_peers:
     peers_raw = st.text_input(
-        "Peer tickers", value="MSFT, GOOGL, NVDA",
-        help="Comma-separated, up to 5",
+        "Peers (comma-sep)", value="MSFT, GOOGL, NVDA",
+        help="Up to 5 peer tickers for the compare row",
     )
+with tb_fast:
     fast = st.checkbox("Fast mode", value=False,
-                      help="Skip ML + backtest (~3x faster)")
+                       help="Skip ML + backtest")
+with tb_run:
     run = st.button("Analyze", type="primary", width="stretch")
-
-    st.markdown("---")
-    st.caption(
-        "All sections render on one page. "
-        "Scroll only if you want the peer comparison at the bottom."
-    )
+st.markdown('</div>', unsafe_allow_html=True)
 
 
 if not run:
     st.markdown(
         '<div class="hb"><div><div class="hb-tkr">📈 StockIQ</div>'
-        '<div class="hb-co">Enter a ticker on the left and hit Analyze.</div></div></div>',
+        '<div class="hb-co">Enter a ticker above and hit Analyze — everything renders on one page.</div></div></div>',
         unsafe_allow_html=True,
     )
     st.stop()
