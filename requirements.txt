@@ -1,28 +1,11 @@
-# Core dependencies
-pandas
-numpy
-requests
-beautifulsoup4
-
-# Financial data
-yfinance
-
-# Machine Learning
-scikit-learn
-
-# NLP and Sentiment Analysis
-textblob
-vaderSentiment
-
-# Data visualization
-plotly
-
-# Web framework
-streamlit
-
-# Explainable AI
-shap
-
-# Utilities
-python-dateutil
-pytz
+streamlit>=1.28.0
+yfinance>=0.2.18
+pandas>=1.5.0
+numpy>=1.24.0
+plotly>=5.15.0
+scikit-learn>=1.3.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+shap>=0.42.0
+python-dateutil>=2.8.2
+pytz>=2023.3

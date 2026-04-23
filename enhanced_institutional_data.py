@@ -80,7 +80,7 @@ class EnhancedInstitutionalData:
             return {'recent_transactions': [], 'total_transactions': 0, 'data_freshness': 'Error'}
     
     def get_earnings_history(self):
-        """Get earnings history and estimates"""
+        """Get earnings history and estimates with revenue growth"""
         try:
             # Get earnings history
             earnings_history = self.stock.earnings_history
@@ -88,9 +88,13 @@ class EnhancedInstitutionalData:
             # Get earnings estimates
             earnings_estimates = self.stock.earnings_estimate
             
+            # Get financials for revenue growth calculation
+            financials = self.stock.financials
+            
             earnings_data = {
                 'history': [],
                 'estimates': [],
+                'revenue_growth': {},
                 'data_freshness': 'Latest earnings data'
             }
             
@@ -139,6 +143,77 @@ class EnhancedInstitutionalData:
                         'analysts': row.get('numberOfAnalysts', 'N/A'),
                         'growth': row.get('growth', 'N/A')
                     })
+            
+            # Calculate revenue growth metrics
+            if financials is not None and not financials.empty:
+                try:
+                    # Get revenue data (Total Revenue)
+                    revenue_data = financials.loc['Total Revenue'] if 'Total Revenue' in financials.index else None
+                    
+                    if revenue_data is not None and len(revenue_data) >= 2:
+                        # Year-over-Year revenue growth
+                        current_year_revenue = revenue_data.iloc[0]  # Most recent year
+                        previous_year_revenue = revenue_data.iloc[1]  # Previous year
+                        
+                        if previous_year_revenue != 0:
+                            yoy_revenue_growth = ((current_year_revenue - previous_year_revenue) / previous_year_revenue) * 100
+                        else:
+                            yoy_revenue_growth = 0
+                        
+                        # Calculate YTD growth (if we have quarterly data)
+                        quarterly_financials = self.stock.quarterly_financials
+                        if quarterly_financials is not None and not quarterly_financials.empty:
+                            try:
+                                quarterly_revenue = quarterly_financials.loc['Total Revenue']
+                                if len(quarterly_revenue) >= 4:
+                                    # Sum last 4 quarters for current year
+                                    current_ytd_revenue = quarterly_revenue.iloc[:4].sum()
+                                    # Sum quarters 4-7 for previous year
+                                    previous_ytd_revenue = quarterly_revenue.iloc[4:8].sum() if len(quarterly_revenue) >= 8 else previous_year_revenue
+                                    
+                                    if previous_ytd_revenue != 0:
+                                        ytd_revenue_growth = ((current_ytd_revenue - previous_ytd_revenue) / previous_ytd_revenue) * 100
+                                    else:
+                                        ytd_revenue_growth = 0
+                                else:
+                                    ytd_revenue_growth = yoy_revenue_growth  # Fallback to YoY
+                            except:
+                                ytd_revenue_growth = yoy_revenue_growth  # Fallback to YoY
+                        else:
+                            ytd_revenue_growth = yoy_revenue_growth  # Fallback to YoY
+                        
+                        earnings_data['revenue_growth'] = {
+                            'yoy_growth': round(yoy_revenue_growth, 2),
+                            'ytd_growth': round(ytd_revenue_growth, 2),
+                            'current_year_revenue': current_year_revenue,
+                            'previous_year_revenue': previous_year_revenue,
+                            'growth_trend': 'positive' if yoy_revenue_growth > 0 else 'negative' if yoy_revenue_growth < 0 else 'stable'
+                        }
+                    else:
+                        earnings_data['revenue_growth'] = {
+                            'yoy_growth': 'N/A',
+                            'ytd_growth': 'N/A',
+                            'current_year_revenue': 'N/A',
+                            'previous_year_revenue': 'N/A',
+                            'growth_trend': 'N/A'
+                        }
+                except Exception as e:
+                    print(f"⚠️ Revenue growth calculation error: {e}")
+                    earnings_data['revenue_growth'] = {
+                        'yoy_growth': 'N/A',
+                        'ytd_growth': 'N/A',
+                        'current_year_revenue': 'N/A',
+                        'previous_year_revenue': 'N/A',
+                        'growth_trend': 'N/A'
+                    }
+            else:
+                earnings_data['revenue_growth'] = {
+                    'yoy_growth': 'N/A',
+                    'ytd_growth': 'N/A',
+                    'current_year_revenue': 'N/A',
+                    'previous_year_revenue': 'N/A',
+                    'growth_trend': 'N/A'
+                }
             
             return earnings_data
             

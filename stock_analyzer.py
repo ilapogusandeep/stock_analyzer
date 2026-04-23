@@ -1191,6 +1191,7 @@ class UniversalStockAnalyzer:
                 features['news_sentiment'] = news_sentiment.get('overall_sentiment', 0)
                 features['news_count'] = news_sentiment.get('news_count', 0)
                 features['news_positive_ratio'] = news_sentiment.get('positive_ratio', 0.5)
+                features['news_confidence'] = news_sentiment.get('confidence', 0)
                 
                 # Social sentiment features
                 social_sentiment = enhanced_data.get('social_sentiment', {})
@@ -1220,6 +1221,33 @@ class UniversalStockAnalyzer:
                 features['vix'] = economic_data.get('vix', 20)
                 features['treasury_yield'] = economic_data.get('treasury_yield', 3.0)
                 features['dollar_index'] = economic_data.get('dollar_index', 100)
+                
+                # NEW: Stock Rankings Features
+                stock_rankings = enhanced_data.get('stock_rankings', {})
+                if stock_rankings:
+                    # Finviz rankings
+                    finviz_data = stock_rankings.get('finviz_rankings', {})
+                    features['finviz_pe_ratio'] = self._safe_float(finviz_data.get('pe_ratio', 0))
+                    features['finviz_peg_ratio'] = self._safe_float(finviz_data.get('peg_ratio', 0))
+                    features['finviz_price_to_sales'] = self._safe_float(finviz_data.get('price_to_sales', 0))
+                    features['finviz_debt_to_equity'] = self._safe_float(finviz_data.get('debt_to_equity', 0))
+                    features['finviz_roe'] = self._safe_float(finviz_data.get('return_on_equity', 0))
+                    
+                    # MarketWatch rankings
+                    mw_data = stock_rankings.get('marketwatch_rankings', {})
+                    features['mw_average_rating'] = mw_data.get('average_rating', 0)
+                    features['mw_rating_count'] = mw_data.get('rating_count', 0)
+                    
+                    # Yahoo rankings
+                    yahoo_data = stock_rankings.get('yahoo_rankings', {})
+                    features['yahoo_recommendation_mean'] = yahoo_data.get('recommendation_mean', 0)
+                    features['yahoo_target_mean_price'] = yahoo_data.get('target_mean_price', 0)
+                    features['yahoo_analyst_opinions'] = yahoo_data.get('number_of_analyst_opinions', 0)
+                    
+                    # Sector performance
+                    sector_data = stock_rankings.get('sector_performance', {})
+                    features['sector_outperformance'] = sector_data.get('outperformance', 0)
+                    features['sector_rank'] = 1 if sector_data.get('sector_rank') == 'Above' else 0
             
             # Fill NaN values
             features = features.fillna(method='ffill').fillna(0)
@@ -1229,6 +1257,15 @@ class UniversalStockAnalyzer:
         except Exception as e:
             print(f"❌ Enhanced feature creation error: {e}")
             return pd.DataFrame()
+    
+    def _safe_float(self, value):
+        """Safely convert value to float, handling 'N/A' and other non-numeric values"""
+        try:
+            if value == 'N/A' or value is None:
+                return 0.0
+            return float(value)
+        except (ValueError, TypeError):
+            return 0.0
     
     def _generate_ml_explanation(self, direction, confidence, top_features, enhanced_data):
         """Generate natural language explanation for ML prediction"""
