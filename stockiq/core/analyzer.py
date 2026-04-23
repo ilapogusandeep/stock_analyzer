@@ -1039,11 +1039,20 @@ class UniversalStockAnalyzer:
             # Weighted ensemble
             ensemble_pred = (rf_pred * 0.6 + gb_pred * 0.4)
             
-            # Calculate direction and confidence
+            # Calculate direction and confidence. `predict_proba` already
+            # gives bullish+bearish = 1, so adding a derived neutral term on
+            # top yields sums in [1, 2]. Normalize all three back to 1.0 so
+            # the UI displays true percentages.
             bullish_prob = ensemble_pred[1]
             bearish_prob = ensemble_pred[0]
             neutral_prob = 1 - abs(bullish_prob - bearish_prob)
-            
+
+            _total = bullish_prob + bearish_prob + neutral_prob
+            if _total > 0:
+                bullish_prob /= _total
+                bearish_prob /= _total
+                neutral_prob /= _total
+
             if bullish_prob > bearish_prob:
                 direction = "BULLISH"
                 confidence = bullish_prob
