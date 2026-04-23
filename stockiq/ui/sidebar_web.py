@@ -4,11 +4,6 @@ Sidebar layout web interface with detailed analysis on the right
 """
 
 import streamlit as st
-import sys
-import os
-
-# Add current directory to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 st.set_page_config(
     page_title="🏆 Stock Analyzer",
