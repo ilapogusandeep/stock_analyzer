@@ -61,7 +61,7 @@ tb_logo, tb_tkr, tb_fast, tb_run, tb_spacer = st.columns(
 )
 with tb_logo:
     st.markdown(
-        '<div class="topbar-logo">📈 StockIQ<span>dense one-page analysis</span></div>',
+        '<div class="topbar-logo">📈 StockIQ</div>',
         unsafe_allow_html=True,
     )
 with tb_tkr:
