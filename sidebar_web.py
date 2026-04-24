@@ -199,6 +199,31 @@ with c_left:
         ],
     )
 
+    # --- Short interest + ownership (positioning) ---
+    short_pct = info.get("shortPercentOfFloat")
+    short_ratio = info.get("shortRatio")  # days to cover
+    shares_short = info.get("sharesShort")
+    shares_short_prior = info.get("sharesShortPriorMonth")
+    insider_pct = info.get("heldPercentInsiders")
+    inst_pct = info.get("heldPercentInstitutions")
+
+    short_delta_str = "—"
+    if shares_short and shares_short_prior:
+        delta_pct = (shares_short - shares_short_prior) / shares_short_prior * 100
+        short_delta_str = f"{delta_pct:+.1f}%"
+
+    kv_block(
+        "Positioning",
+        [
+            ("Short % Float",  fmt_pct_ratio(short_pct, 2) if short_pct else "—"),
+            ("Days to Cover",  fmt_ratio(short_ratio, 2) if short_ratio else "—"),
+            ("Short MoM Δ",    short_delta_str),
+            ("Insider Own",    fmt_pct_ratio(insider_pct, 2) if insider_pct else "—"),
+            ("Institutional",  fmt_pct_ratio(inst_pct, 1) if inst_pct else "—"),
+        ],
+        sub="short · ownership",
+    )
+
     if sent:
         label = sent.get("sentiment_label", "NEUTRAL")
         label_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(label, "⚪")
@@ -341,6 +366,42 @@ with c_right:
         if isinstance(inst, dict) else []
     )
     earnings_history_block(earnings_hist)
+
+    # --- Analyst consensus (from yfinance info) ---
+    rec_key = info.get("recommendationKey", "") or ""
+    rec_emoji = {
+        "strong_buy": "🟢", "buy": "🟢",
+        "hold": "🟡",
+        "underperform": "🔴", "sell": "🔴", "strong_sell": "🔴",
+    }.get(rec_key.lower(), "⚪")
+    rec_mean = info.get("recommendationMean")  # 1.0 best, 5.0 worst
+    n_analysts = info.get("numberOfAnalystOpinions")
+    tgt_mean = info.get("targetMeanPrice")
+    tgt_low = info.get("targetLowPrice")
+    tgt_high = info.get("targetHighPrice")
+    current_px = tech.get("current_price")
+
+    implied_upside = "—"
+    implied_cls = "flat"
+    if tgt_mean and current_px:
+        u = (tgt_mean / current_px - 1) * 100
+        implied_upside = fmt_pct(u, decimals=1)
+        implied_cls = "up" if u > 0 else "down" if u < 0 else "flat"
+
+    if n_analysts or tgt_mean or rec_mean:
+        kv_block(
+            "Analyst consensus",
+            [
+                ("Rating",          f"{rec_emoji} {rec_key.replace('_', ' ').upper() or '—'}"),
+                ("Score (1–5)",     fmt_ratio(rec_mean, 2) if rec_mean else "—"),
+                ("Analysts",        str(int(n_analysts)) if n_analysts else "—"),
+                ("Target Mean",     fmt_price(tgt_mean) if tgt_mean else "—"),
+                ("Target Range",    (f"{fmt_price(tgt_low)} – {fmt_price(tgt_high)}"
+                                     if (tgt_low and tgt_high) else "—")),
+                ("Implied Upside",  implied_upside),
+            ],
+            sub="12m price targets",
+        )
 
     if ml:
         shap_exp = ml.get("shap_explanations") or {}
