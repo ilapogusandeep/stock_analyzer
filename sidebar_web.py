@@ -6,35 +6,49 @@ Every section lives on the same page; no tabs, no expanders.
 
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from stockiq.core.analyzer import UniversalStockAnalyzer
-from stockiq.core.prediction_log import PredictionLog
-from stockiq.data.options import get_options_flow, get_unusual_activity
-from stockiq.data.tickers import POPULAR_TICKERS
-from stockiq.ui.components import (
-    earnings_history_block,
-    external_links,
-    fmt_big_money,
-    fmt_pct,
-    fmt_pct_ratio,
-    fmt_price,
-    fmt_ratio,
-    header_band,
-    kv_block,
-    news_feed_block,
-    options_flow_block,
-    panel_close,
-    panel_open,
-    performance_bars,
-    probability_scenarios_combined,
-    unusual_options_block,
-)
-from stockiq.ui.theme import inject_theme
+
+def _import_stockiq_modules():
+    """Import stockiq symbols with one retry after purging stale sys.modules.
+
+    Streamlit's hot-reload on Python 3.13 occasionally drops a subpackage
+    like 'stockiq.core' from sys.modules between reruns, causing KeyError
+    at importlib._find_and_load_unlocked. Detect it, clear every stockiq*
+    entry, and try again.
+    """
+    def _do_import():
+        from stockiq.core.analyzer import UniversalStockAnalyzer
+        from stockiq.core.prediction_log import PredictionLog
+        from stockiq.data.options import get_options_flow, get_unusual_activity
+        from stockiq.data.tickers import POPULAR_TICKERS
+        from stockiq.ui.components import (
+            earnings_history_block, external_links, fmt_big_money, fmt_pct,
+            fmt_pct_ratio, fmt_price, fmt_ratio, header_band, kv_block,
+            news_feed_block, options_flow_block, panel_close, panel_open,
+            performance_bars, probability_scenarios_combined,
+            unusual_options_block,
+        )
+        from stockiq.ui.theme import inject_theme
+        return locals()
+
+    try:
+        return _do_import()
+    except KeyError as e:
+        if not str(e).startswith("'stockiq"):
+            raise
+        for mod in [m for m in sys.modules if m == "stockiq" or m.startswith("stockiq.")]:
+            sys.modules.pop(mod, None)
+        return _do_import()
+
+
+globals().update(_import_stockiq_modules())
 
 # ---------------------------------------------------------------------------
 # Page setup
