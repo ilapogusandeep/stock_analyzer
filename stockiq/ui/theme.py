@@ -235,6 +235,16 @@ DENSE_DARK_CSS = """
   }
 
   /* Unusual options panel */
+  .uo-scroll {
+      max-height: 220px;
+      overflow-y: auto;
+      padding-right: 4px;
+  }
+  .uo-scroll::-webkit-scrollbar { width: 6px; }
+  .uo-scroll::-webkit-scrollbar-thumb {
+      background: rgba(148,163,255,0.15);
+      border-radius: 3px;
+  }
   .uo-row {
       display: grid;
       grid-template-columns: 48px 56px 52px 52px 1fr;
@@ -268,6 +278,56 @@ DENSE_DARK_CSS = """
       color: #e6ebff; font-weight: 600;
       text-align: right;
       font-variant-numeric: tabular-nums;
+  }
+
+  /* Top holders panel (13F) */
+  .ih-scroll {
+      max-height: 220px;
+      overflow-y: auto;
+      padding-right: 4px;
+  }
+  .ih-scroll::-webkit-scrollbar { width: 6px; }
+  .ih-scroll::-webkit-scrollbar-thumb {
+      background: rgba(148,163,255,0.15);
+      border-radius: 3px;
+  }
+  .ih-row {
+      display: grid;
+      grid-template-columns: 1fr 56px 44px 48px 52px;
+      column-gap: 6px;
+      font-size: 0.78rem;
+      padding: 5px 0;
+      border-bottom: 1px dashed rgba(148,163,255,0.07);
+      align-items: center;
+  }
+  .ih-row:last-child { border-bottom: none; }
+  .ih-name {
+      color: #e6ebff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+  }
+  .ih-val {
+      color: #fff; font-weight: 600;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+  }
+  .ih-pct {
+      color: #94a3b8;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+  }
+  .ih-chg {
+      text-align: right;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+  }
+  .ih-date {
+      color: #64748b;
+      text-align: right;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
   }
 
   /* Track record panel */

@@ -30,10 +30,10 @@ def _import_stockiq_modules():
         from stockiq.data.tickers import POPULAR_TICKERS
         from stockiq.ui.components import (
             earnings_history_block, external_links, fmt_big_money, fmt_pct,
-            fmt_pct_ratio, fmt_price, fmt_ratio, header_band, kv_block,
-            news_feed_block, options_flow_block, panel_close, panel_open,
-            performance_bars, probability_scenarios_combined,
-            unusual_options_block,
+            fmt_pct_ratio, fmt_price, fmt_ratio, header_band,
+            institutional_holders_block, kv_block, news_feed_block,
+            options_flow_block, panel_close, panel_open, performance_bars,
+            probability_scenarios_combined, unusual_options_block,
         )
         from stockiq.ui.theme import inject_theme
         return locals()
@@ -172,7 +172,7 @@ options_flow = get_options_flow(
 )
 
 # --- Unusual options activity — top strikes with V/OI ≥ 2× ranked by $ premium.
-unusual_opts = get_unusual_activity(ticker, top_n=3, min_voi_ratio=2.0)
+unusual_opts = get_unusual_activity(ticker, top_n=10, min_voi_ratio=2.0)
 
 hist = data["hist"]
 info = data.get("info", {}) or {}
@@ -268,6 +268,13 @@ with c_left:
 
     # Options flow — put/call ratios + ATM IV from nearest expiry
     options_flow_block(options_flow)
+
+    # Top hedge fund / institutional holders — latest 13F filings
+    top_holders = (
+        (inst.get("institutional_holders") or {}).get("top_holders", [])
+        if isinstance(inst, dict) else []
+    )
+    institutional_holders_block(top_holders, max_items=8)
 
 
 # ---- Middle column: price chart + technicals + performance -----------------

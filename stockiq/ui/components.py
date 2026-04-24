@@ -345,7 +345,86 @@ def unusual_options_block(rows: list) -> None:
         )
     st.markdown(
         panel_open("Unusual options", "V/OI ≥ 2× · ranked by premium $")
-        + html + panel_close(),
+        + f'<div class="uo-scroll">{html}</div>'
+        + panel_close(),
+        unsafe_allow_html=True,
+    )
+
+
+def institutional_holders_block(holders: list, max_items: int = 8) -> None:
+    """Top hedge funds / institutions holding the stock, latest filing first."""
+    if not holders:
+        return
+
+    def _fmt_value(v) -> str:
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return "—"
+        if v >= 1e9:
+            return f"${v/1e9:.1f}B"
+        if v >= 1e6:
+            return f"${v/1e6:.0f}M"
+        if v >= 1e3:
+            return f"${v/1e3:.0f}K"
+        return f"${v:.0f}"
+
+    def _fmt_pct_held(v) -> str:
+        try:
+            v = float(v)
+            return f"{v*100:.1f}%" if v < 1 else f"{v:.1f}%"
+        except (TypeError, ValueError):
+            return "—"
+
+    def _fmt_change(v) -> str:
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return "—"
+        sign = "+" if v > 0 else ""
+        pct = v * 100 if abs(v) < 1 else v
+        return f"{sign}{pct:.1f}%"
+
+    def _fmt_date(d) -> str:
+        try:
+            import pandas as pd_
+            ts = pd_.to_datetime(d)
+            return ts.strftime("%b%Y")
+        except Exception:
+            return str(d)[:10] if d else "—"
+
+    def _sort_key(h):
+        try:
+            import pandas as pd_
+            return pd_.to_datetime(h.get("date_reported"))
+        except Exception:
+            return pd.Timestamp.min
+
+    sorted_holders = sorted(holders, key=_sort_key, reverse=True)[:max_items]
+
+    html = ""
+    for h in sorted_holders:
+        name = str(h.get("name") or "—")[:28]
+        change = h.get("pct_change")
+        try:
+            change_val = float(change)
+            change_cls = "up" if change_val > 0 else "down" if change_val < 0 else "flat"
+        except (TypeError, ValueError):
+            change_cls = "flat"
+        html += (
+            f'<div class="ih-row">'
+            f'<span class="ih-name">{name}</span>'
+            f'<span class="ih-val">{_fmt_value(h.get("value"))}</span>'
+            f'<span class="ih-pct">{_fmt_pct_held(h.get("percent_out"))}</span>'
+            f'<span class="ih-chg {change_cls}">{_fmt_change(h.get("pct_change"))}</span>'
+            f'<span class="ih-date">{_fmt_date(h.get("date_reported"))}</span>'
+            f'</div>'
+        )
+
+    st.markdown(
+        panel_open("Top holders", f"latest 13F · {min(len(holders), max_items)} funds")
+        + f'<div class="ih-scroll">{html}</div>'
+        + panel_close(),
         unsafe_allow_html=True,
     )
 

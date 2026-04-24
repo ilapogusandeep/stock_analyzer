@@ -99,6 +99,9 @@ class EnhancedInstitutionalData:
             }
             
             if earnings_history is not None and not earnings_history.empty:
+                # Sort by report date descending so the UI shows the latest
+                # quarter first rather than the oldest one in the window.
+                earnings_history = earnings_history.sort_index(ascending=False)
                 for date, row in earnings_history.head(5).iterrows():
                     # Convert date to proper quarter format
                     year = date.year
