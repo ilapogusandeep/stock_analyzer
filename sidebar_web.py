@@ -460,14 +460,33 @@ with c_right:
             return f"{horizon_label} · accuracy {avg*100:.0f}%"
         return horizon_label
 
+    def _render_forecast(pred: dict, header_title: str, header_sub: str):
+        """Render a horizon header band + the scenarios panel.
+
+        Calls probability_scenarios_combined with title/sub kwargs when
+        the loaded function accepts them, otherwise falls back to the
+        original positional-only signature plus a separate header band.
+        Defends against Streamlit Cloud bytecode-cache mismatches when
+        the panel function and the caller deploy at different rates.
+        """
+        probs = pred.get("scenario_probabilities", {}) or {}
+        targets = pred.get("scenario_targets", {}) or {}
+        current = tech.get("current_price")
+        try:
+            probability_scenarios_combined(
+                probs, targets, current,
+                title=header_title, sub=header_sub,
+            )
+        except TypeError:
+            st.markdown(
+                f'<div class="hb"><span>{header_title}</span>'
+                f'<span class="hb-sub">{header_sub}</span></div>',
+                unsafe_allow_html=True,
+            )
+            probability_scenarios_combined(probs, targets, current)
+
     if ml:
-        probability_scenarios_combined(
-            ml.get("scenario_probabilities", {}) or {},
-            ml.get("scenario_targets", {}) or {},
-            tech.get("current_price"),
-            title="AI · 1 week",
-            sub=_accuracy_sub(ml, "5d horizon"),
-        )
+        _render_forecast(ml, "AI · 1 week", _accuracy_sub(ml, "5d horizon"))
     else:
         st.markdown(
             panel_open("AI · 1 week")
@@ -477,13 +496,7 @@ with c_right:
         )
 
     if ml_1m:
-        probability_scenarios_combined(
-            ml_1m.get("scenario_probabilities", {}) or {},
-            ml_1m.get("scenario_targets", {}) or {},
-            tech.get("current_price"),
-            title="AI · 1 month",
-            sub=_accuracy_sub(ml_1m, "21d horizon"),
-        )
+        _render_forecast(ml_1m, "AI · 1 month", _accuracy_sub(ml_1m, "21d horizon"))
 
     # Earnings history (from yfinance via institutional_data)
     earnings_hist = (

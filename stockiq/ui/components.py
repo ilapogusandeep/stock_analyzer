@@ -228,6 +228,7 @@ def probability_scenarios_combined(
     current: Optional[float],
     title: str = "AI scenario & targets",
     sub: str = "12m horizon",
+    **_extra,  # tolerate forward-compat kwargs without breaking old callers
 ) -> None:
     """One panel that shows probability bar + target price + % delta per
     direction, saving a slot in the right column for other content.
