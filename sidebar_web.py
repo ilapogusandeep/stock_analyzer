@@ -431,20 +431,6 @@ with c_right:
             sub="12m price targets",
         )
 
-    if ml:
-        shap_exp = ml.get("shap_explanations") or {}
-        top = shap_exp.get("top_features") or ml.get("feature_importance") or []
-        if top:
-            try:
-                if isinstance(top[0], (list, tuple)):
-                    pairs = [(str(f), float(v)) for f, v in top[:5]]
-                else:
-                    pairs = [(str(item["feature"]), float(item["importance"])) for item in top[:5]]
-                rows = [(k, f"{v:.3f}") for k, v in pairs]
-                kv_block("Top features", rows, sub="importance")
-            except Exception:
-                pass
-
     if bt:
         alpha_spy = bt.get("alpha_vs_spy")
         alpha_bh = bt.get("alpha_vs_buy_hold")
