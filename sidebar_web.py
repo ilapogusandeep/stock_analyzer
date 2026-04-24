@@ -14,6 +14,7 @@ from plotly.subplots import make_subplots
 
 from stockiq.core.analyzer import UniversalStockAnalyzer
 from stockiq.core.prediction_log import PredictionLog
+from stockiq.data.options import get_options_flow
 from stockiq.data.tickers import POPULAR_TICKERS
 from stockiq.ui.components import (
     earnings_history_block,
@@ -25,6 +26,7 @@ from stockiq.ui.components import (
     fmt_ratio,
     header_band,
     kv_block,
+    options_flow_block,
     panel_close,
     panel_open,
     performance_bars,
@@ -148,6 +150,12 @@ except Exception:
     # Logging failure should never block the UI.
     pass
 
+# --- Options flow (nearest-expiry put/call ratios + ATM IV).
+#    2-3s yfinance call; silently returns {} on failure.
+options_flow = get_options_flow(
+    ticker, spot=(data.get("tech_data") or {}).get("current_price")
+)
+
 hist = data["hist"]
 info = data.get("info", {}) or {}
 tech = data.get("tech_data", {}) or {}
@@ -239,6 +247,9 @@ with c_left:
         ],
         sub="short · ownership",
     )
+
+    # Options flow — put/call ratios + ATM IV from nearest expiry
+    options_flow_block(options_flow)
 
     if sent:
         label = sent.get("sentiment_label", "NEUTRAL")

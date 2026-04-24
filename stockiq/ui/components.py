@@ -235,6 +235,48 @@ def probability_scenarios_combined(probs: dict, targets: dict, current: Optional
     )
 
 
+def options_flow_block(flow: dict) -> None:
+    """Small panel summarizing near-term options activity."""
+    if not flow:
+        return
+
+    tilt = flow.get("tilt") or "—"
+    tilt_cls = {
+        "BULLISH": "up",
+        "BEARISH": "down",
+    }.get(tilt, "flat")
+
+    def _fmt_vol(v: Optional[float]) -> str:
+        if v is None or v == 0:
+            return "—"
+        if v >= 1e6:
+            return f"{v/1e6:.2f}M"
+        if v >= 1e3:
+            return f"{v/1e3:.1f}K"
+        return f"{int(v)}"
+
+    dte = flow.get("days_to_expiry")
+    expiry_label = flow.get("expiry") or "—"
+    if dte is not None:
+        expiry_label = f"{flow.get('expiry')} · {dte}d"
+
+    atm_iv = flow.get("atm_iv")
+    iv_str = f"{atm_iv*100:.1f}%" if atm_iv else "—"
+
+    kv_block(
+        "Options flow",
+        [
+            ("P/C Volume",   fmt_ratio(flow.get("put_call_vol_ratio"), 2)),
+            ("P/C Open Int", fmt_ratio(flow.get("put_call_oi_ratio"), 2)),
+            ("Call vol",     _fmt_vol(flow.get("call_volume"))),
+            ("Put vol",      _fmt_vol(flow.get("put_volume"))),
+            ("ATM IV",       iv_str),
+            ("Tilt",         f'<span class="{tilt_cls}">{tilt}</span>'),
+        ],
+        sub=f"expiry {expiry_label}",
+    )
+
+
 def track_record_block(summary: dict) -> None:
     """Render overall hit-rate + calibration buckets + recent predictions."""
     total = summary.get("total", 0)
