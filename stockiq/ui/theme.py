@@ -286,6 +286,33 @@ DENSE_DARK_CSS = """
       font-variant-numeric: tabular-nums;
   }
 
+  /* Performance strip (under chart) */
+  .ps-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 4px 0 8px;
+  }
+  .ps-pill {
+      display: inline-flex; gap: 6px; align-items: baseline;
+      padding: 3px 10px;
+      background: rgba(148,163,255,0.05);
+      border: 1px solid rgba(148,163,255,0.10);
+      border-radius: 12px;
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+  }
+  .ps-pill .ps-lbl {
+      color: #94a3b8; font-size: 0.68rem;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      font-weight: 600;
+  }
+  .ps-pill .ps-val { color: #f1f5f9; font-weight: 600; }
+  .ps-pill.up   { border-color: rgba(34,197,94,0.30); background: rgba(34,197,94,0.08); }
+  .ps-pill.up   .ps-val { color: #4ade80; }
+  .ps-pill.down { border-color: rgba(239,68,68,0.30); background: rgba(239,68,68,0.08); }
+  .ps-pill.down .ps-val { color: #f87171; }
+
   /* Top holders panel (13F) */
   .ih-scroll {
       max-height: 220px;

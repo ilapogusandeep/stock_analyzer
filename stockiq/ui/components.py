@@ -646,3 +646,34 @@ def performance_bars(tech: dict) -> None:
         )
     st.markdown(panel_open("Performance", "vs today") + body + panel_close(),
                 unsafe_allow_html=True)
+
+
+def performance_strip(tech: dict) -> None:
+    """Thin horizontal strip of 1D/5D/1M/3M/1Y returns as colored pills.
+
+    Intended to sit directly under the price chart — much less vertical
+    space than performance_bars. No panel chrome.
+    """
+    periods = [
+        ("1D", tech.get("performance_1d")),
+        ("5D", tech.get("performance_5d")),
+        ("1M", tech.get("performance_1m")),
+        ("3M", tech.get("performance_3m")),
+        ("1Y", tech.get("performance_1y")),
+    ]
+    pills = ""
+    for label, v in periods:
+        if v is None:
+            pills += (
+                f'<span class="ps-pill">'
+                f'<span class="ps-lbl">{label}</span>'
+                f'<span class="ps-val">—</span></span>'
+            )
+            continue
+        cls = _cls(v)
+        pills += (
+            f'<span class="ps-pill {cls}">'
+            f'<span class="ps-lbl">{label}</span>'
+            f'<span class="ps-val">{fmt_pct(v, decimals=1)}</span></span>'
+        )
+    st.markdown(f'<div class="ps-row">{pills}</div>', unsafe_allow_html=True)

@@ -16,12 +16,14 @@ from plotly.subplots import make_subplots
 
 
 def _import_stockiq_modules():
-    """Import stockiq symbols with one retry after purging stale sys.modules.
+    """Import stockiq symbols with retries after purging stale sys.modules.
 
     Streamlit's hot-reload on Python 3.13 occasionally drops a subpackage
-    like 'stockiq.core' from sys.modules between reruns, causing KeyError
-    at importlib._find_and_load_unlocked. Detect it, clear every stockiq*
-    entry, and try again.
+    like 'stockiq.data' from sys.modules between reruns while leaving
+    'stockiq' itself, which causes KeyError at
+    importlib._find_and_load_unlocked. Some retries also hit ImportError
+    if a parent package is mid-teardown. Purge every stockiq* entry and
+    try again — up to 3 attempts.
     """
     def _do_import():
         from stockiq.core.analyzer import UniversalStockAnalyzer
@@ -33,19 +35,27 @@ def _import_stockiq_modules():
             fmt_pct_ratio, fmt_price, fmt_ratio, header_band,
             institutional_holders_block, kv_block, news_feed_block,
             options_flow_block, panel_close, panel_open, performance_bars,
-            probability_scenarios_combined, unusual_options_block,
+            performance_strip, probability_scenarios_combined,
+            unusual_options_block,
         )
         from stockiq.ui.theme import inject_theme
         return locals()
 
-    try:
-        return _do_import()
-    except KeyError as e:
-        if not str(e).startswith("'stockiq"):
-            raise
-        for mod in [m for m in sys.modules if m == "stockiq" or m.startswith("stockiq.")]:
+    def _purge():
+        for mod in [m for m in sys.modules
+                    if m == "stockiq" or m.startswith("stockiq.")]:
             sys.modules.pop(mod, None)
-        return _do_import()
+
+    last_exc = None
+    for attempt in range(3):
+        try:
+            return _do_import()
+        except (KeyError, ImportError) as e:
+            if isinstance(e, KeyError) and not str(e).startswith("'stockiq"):
+                raise
+            last_exc = e
+            _purge()
+    raise last_exc  # type: ignore[misc]
 
 
 globals().update(_import_stockiq_modules())
@@ -270,13 +280,6 @@ with c_left:
     # Options flow — put/call ratios + ATM IV from nearest expiry
     options_flow_block(options_flow)
 
-    # Top hedge fund / institutional holders — latest 13F filings
-    top_holders = (
-        (inst.get("institutional_holders") or {}).get("top_holders", [])
-        if isinstance(inst, dict) else []
-    )
-    institutional_holders_block(top_holders, max_items=8)
-
 
 # ---- Middle column: price chart + technicals + performance -----------------
 
@@ -351,6 +354,9 @@ with c_mid:
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
     st.markdown("</div>" + panel_close(), unsafe_allow_html=True)
 
+    # Compact performance strip — one horizontal row under the chart.
+    performance_strip(tech)
+
     mid_l, mid_r = st.columns(2)
     with mid_l:
         rsi_v = tech.get("rsi", 0) or 0
@@ -381,7 +387,12 @@ with c_mid:
             cols=2,
         )
     with mid_r:
-        performance_bars(tech)
+        # Top hedge fund / institutional holders — latest 13F filings
+        top_holders = (
+            (inst.get("institutional_holders") or {}).get("top_holders", [])
+            if isinstance(inst, dict) else []
+        )
+        institutional_holders_block(top_holders, max_items=8)
 
     # --- Analyst consensus + multi-source sentiment (merged) ----------------
     rec_key = info.get("recommendationKey", "") or ""
