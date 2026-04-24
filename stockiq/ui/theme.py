@@ -263,16 +263,16 @@ DENSE_DARK_CSS = """
   }
   .uo-row {
       display: grid;
-      grid-template-columns: 48px 56px 52px 52px 1fr;
-      column-gap: 8px;
-      font-size: 0.85rem;
+      grid-template-columns: 44px 58px 48px 44px 1fr 22px;
+      column-gap: 6px;
+      font-size: 0.82rem;
       padding: 6px 0;
       border-bottom: 1px dashed rgba(148,163,255,0.07);
       align-items: center;
   }
   .uo-row:last-child { border-bottom: none; }
   .uo-side {
-      font-size: 0.68rem; font-weight: 700;
+      font-size: 0.66rem; font-weight: 700;
       text-align: center; padding: 2px 0; border-radius: 4px;
       letter-spacing: 0.05em;
   }
@@ -281,9 +281,15 @@ DENSE_DARK_CSS = """
   .uo-strike {
       color: #fff; font-weight: 600;
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+  }
+  .uo-cluster {
+      font-size: 0.68rem;
+      margin-right: 2px;
+      opacity: 0.85;
   }
   .uo-exp {
-      color: #94a3b8; font-size: 0.78rem;
+      color: #94a3b8; font-size: 0.74rem;
       text-transform: uppercase; letter-spacing: 0.03em;
   }
   .uo-voi {
@@ -295,6 +301,18 @@ DENSE_DARK_CSS = """
       text-align: right;
       font-variant-numeric: tabular-nums;
   }
+  .uo-agg {
+      font-size: 0.62rem; font-weight: 700;
+      text-align: center;
+      padding: 1px 0;
+      border-radius: 3px;
+      letter-spacing: 0;
+      background: rgba(148,163,255,0.08);
+      color: #94a3b8;
+  }
+  .uo-agg.up   { background: rgba(34,197,94,0.20); color: #4ade80; }
+  .uo-agg.down { background: rgba(239,68,68,0.20); color: #f87171; }
+  .uo-agg.flat { background: rgba(148,163,255,0.08); color: #94a3b8; }
 
   /* Performance pills (embedded in panel header) */
   .ps-row {

@@ -158,10 +158,32 @@ def get_unusual_activity(
 
                 d["mid"] = (d["bid"] + d["ask"]) / 2
                 # Fall back to lastPrice if bid/ask are zero (illiquid)
-                if "lastPrice" in d.columns:
-                    fallback = d["lastPrice"].fillna(0)
+                last_col = "lastPrice" if "lastPrice" in d.columns else None
+                if last_col:
+                    fallback = d[last_col].fillna(0)
                     d["mid"] = d["mid"].where(d["mid"] > 0, fallback)
                 d["premium_flow"] = d["volume"] * d["mid"] * 100
+
+                # Aggressor heuristic: position of last trade within the
+                # bid/ask spread. Top third of spread ~ aggressive buy
+                # (took the ask); bottom third ~ aggressive sell (hit the
+                # bid); middle ~ inconclusive. Requires a real spread and
+                # a valid last print; otherwise marked "—".
+                def _aggressor(row):
+                    try:
+                        bid = float(row.get("bid") or 0)
+                        ask = float(row.get("ask") or 0)
+                        last = float(row.get(last_col) or 0) if last_col else 0
+                        if bid <= 0 or ask <= 0 or ask <= bid or last <= 0:
+                            return "—"
+                        pos = (last - bid) / (ask - bid)
+                        if pos >= 0.66:
+                            return "BUY"
+                        if pos <= 0.34:
+                            return "SELL"
+                        return "MID"
+                    except Exception:
+                        return "—"
 
                 for _, r in d.iterrows():
                     rows.append({
@@ -173,10 +195,29 @@ def get_unusual_activity(
                         "voi_ratio": float(r["voi_ratio"]),
                         "mid_price": float(r["mid"]),
                         "premium_flow": float(r["premium_flow"]),
+                        "aggressor": _aggressor(r),
+                        "cluster": False,  # filled in after sort
                         "iv": (float(r["impliedVolatility"])
                                if "impliedVolatility" in d.columns
                                and pd.notna(r.get("impliedVolatility")) else None),
                     })
+
+        # Cluster detection: within a (side, expiry) group, mark rows as
+        # part of a cluster if at least 3 strikes fall within 10% of each
+        # other. Three nearby calls all unusual is much stronger signal
+        # than one lone strike.
+        by_group: dict = {}
+        for r in rows:
+            by_group.setdefault((r["side"], r["expiry"]), []).append(r)
+        for group_rows in by_group.values():
+            strikes = sorted([(g["strike"], g) for g in group_rows])
+            n = len(strikes)
+            for i in range(n):
+                base = strikes[i][0]
+                neighbors = [s for s, _ in strikes
+                             if abs(s - base) / base <= 0.10]
+                if len(neighbors) >= 3:
+                    strikes[i][1]["cluster"] = True
 
         rows.sort(key=lambda x: x["premium_flow"], reverse=True)
         return rows[:top_n]

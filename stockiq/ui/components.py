@@ -357,22 +357,30 @@ def unusual_options_block(rows: list) -> None:
         except Exception:
             return e
 
+    def _agg_badge(agg: str) -> str:
+        cls = {"BUY": "up", "SELL": "down", "MID": "flat"}.get(agg, "flat")
+        label = {"BUY": "B", "SELL": "S", "MID": "M"}.get(agg, "·")
+        return f'<span class="uo-agg {cls}">{label}</span>'
+
     html = ""
     for r in rows:
         side = r["side"]
         side_cls = "up" if side == "C" else "down"
         side_lbl = "CALL" if side == "C" else "PUT"
+        cluster_mark = '<span class="uo-cluster">🔗</span>' if r.get("cluster") else ""
         html += (
             f'<div class="uo-row">'
             f'<span class="uo-side {side_cls}">{side_lbl}</span>'
-            f'<span class="uo-strike">${r["strike"]:.0f}</span>'
+            f'<span class="uo-strike">{cluster_mark}${r["strike"]:.0f}</span>'
             f'<span class="uo-exp">{_fmt_exp(r["expiry"])}</span>'
             f'<span class="uo-voi">{r["voi_ratio"]:.1f}×</span>'
             f'<span class="uo-flow">{_fmt_flow(r["premium_flow"])}</span>'
+            f'{_agg_badge(r.get("aggressor", "—"))}'
             f'</div>'
         )
     st.markdown(
-        panel_open("Unusual options", "V/OI ≥ 2× · ranked by premium $")
+        panel_open("Unusual options",
+                   "V/OI ≥ 2× · B/S/M = bid-ask aggressor · 🔗 = cluster")
         + f'<div class="uo-scroll">{html}</div>'
         + panel_close(),
         unsafe_allow_html=True,
