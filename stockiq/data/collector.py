@@ -499,31 +499,49 @@ class EnhancedDataCollector:
             return {}
     
     def _analyze_text_sentiment(self, text):
-        """Analyze sentiment of text content"""
+        """Analyze sentiment of text content via word-boundary keyword match.
+
+        Case-insensitive, tokenized on non-letters so 'soared,' or 'SOARED!'
+        match 'soar'. Word list covers common finance-news verbs.
+        """
         try:
-            # Positive and negative word lists
-            positive_words = [
-                'beat', 'strong', 'growth', 'positive', 'bullish', 'upgrade', 'gain', 'profit',
-                'exceed', 'outperform', 'rise', 'increase', 'improve', 'success', 'win', 'breakthrough'
-            ]
-            
-            negative_words = [
-                'miss', 'weak', 'decline', 'negative', 'bearish', 'downgrade', 'loss', 'fall',
-                'disappoint', 'underperform', 'drop', 'decrease', 'worse', 'fail', 'lose', 'crash'
-            ]
-            
-            # Count positive and negative words
-            pos_count = sum(text.count(word) for word in positive_words)
-            neg_count = sum(text.count(word) for word in negative_words)
-            
-            # Calculate sentiment score
+            import re
+
+            positive_words = {
+                'beat', 'beats', 'strong', 'stronger', 'growth', 'grow', 'positive', 'bullish',
+                'upgrade', 'upgrades', 'upgraded', 'gain', 'gains', 'gained', 'profit', 'profits',
+                'exceed', 'exceeds', 'exceeded', 'outperform', 'outperforms', 'outperformed',
+                'rise', 'rises', 'rose', 'rising', 'increase', 'increased', 'improve', 'improves',
+                'improved', 'success', 'successful', 'win', 'wins', 'winning', 'breakthrough',
+                'soar', 'soars', 'soared', 'soaring', 'surge', 'surges', 'surged', 'rally',
+                'rallies', 'rallied', 'jump', 'jumps', 'jumped', 'skyrocket', 'skyrockets',
+                'skyrocketed', 'spike', 'spikes', 'spiked', 'pop', 'pops', 'popped', 'breakout',
+                'high', 'highs', 'record', 'milestone', 'up', 'higher', 'top', 'boost', 'boosts',
+                'boosted', 'buy', 'rated', 'raised', 'best', 'boom', 'booming', 'momentum',
+            }
+
+            negative_words = {
+                'miss', 'misses', 'missed', 'weak', 'weaker', 'decline', 'declines', 'declined',
+                'negative', 'bearish', 'downgrade', 'downgrades', 'downgraded', 'loss', 'losses',
+                'fall', 'falls', 'fell', 'falling', 'disappoint', 'disappoints', 'disappointed',
+                'underperform', 'underperforms', 'underperformed', 'drop', 'drops', 'dropped',
+                'decrease', 'decreased', 'worse', 'worst', 'fail', 'fails', 'failed', 'lose',
+                'loses', 'lost', 'crash', 'crashes', 'crashed', 'plunge', 'plunges', 'plunged',
+                'slump', 'slumps', 'slumped', 'tumble', 'tumbles', 'tumbled', 'sink', 'sinks',
+                'sank', 'dive', 'dives', 'dived', 'dip', 'dips', 'dipped', 'low', 'lows',
+                'down', 'lower', 'cut', 'cuts', 'slash', 'slashed', 'sell', 'warning', 'warns',
+                'lawsuit', 'fraud', 'probe', 'recall', 'risk', 'concern', 'concerns', 'fear',
+                'fears', 'bust', 'layoffs', 'layoff', 'bankruptcy',
+            }
+
+            tokens = re.findall(r"[a-z]+", text.lower())
+            pos_count = sum(1 for t in tokens if t in positive_words)
+            neg_count = sum(1 for t in tokens if t in negative_words)
+
             if pos_count + neg_count > 0:
-                sentiment = (pos_count - neg_count) / (pos_count + neg_count)
-            else:
-                sentiment = 0.0
-            
-            return sentiment
-            
+                return (pos_count - neg_count) / (pos_count + neg_count)
+            return 0.0
+
         except Exception:
             return 0.0
     

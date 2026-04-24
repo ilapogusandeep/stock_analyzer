@@ -256,9 +256,8 @@ def news_feed_block(articles: list, max_items: int = 6) -> None:
         rows += (
             f'<div class="nf-row">'
             f'<span class="nf-dot">{emoji}</span>'
-            f'<span class="nf-h">{headline}</span>'
+            f'<span class="nf-h">{headline}{src_html}</span>'
             f'<span class="nf-score {cls}">{score:+.2f}</span>'
-            f'{src_html}'
             f'</div>'
         )
     st.markdown(
