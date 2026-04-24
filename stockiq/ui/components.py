@@ -259,9 +259,22 @@ def probability_scenarios_combined(probs: dict, targets: dict, current: Optional
 def news_feed_block(articles: list, max_items: int = 20) -> None:
     """Show the actual headlines + per-article sentiment score that fed the
     model. Transparency so users can see the 'evidence'. Rendered inside a
-    scrollable container so many headlines fit without blowing up height."""
+    scrollable container so many headlines fit without blowing up height.
+
+    Articles are sorted latest-first so the visible rows (before scrolling)
+    are the most recent.
+    """
     if not articles:
         return
+
+    def _sort_key(a):
+        ts = a.get("published_at")
+        try:
+            return -float(ts) if ts else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    articles = sorted(articles, key=_sort_key)
 
     rows = ""
     for a in articles[:max_items]:
