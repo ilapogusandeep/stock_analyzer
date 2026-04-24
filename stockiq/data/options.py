@@ -18,7 +18,7 @@ Returns ``{}`` on any failure — never raises.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import pandas as pd
 
@@ -100,3 +100,85 @@ def get_options_flow(ticker: str, spot: Optional[float] = None) -> dict[str, Any
         }
     except Exception:
         return {}
+
+
+def get_unusual_activity(
+    ticker: str,
+    top_n: int = 5,
+    min_voi_ratio: float = 2.0,
+    max_expiries: int = 3,
+    min_volume: int = 100,
+) -> List[dict]:
+    """Detect unusual options activity across the next few expiries.
+
+    An "unusual" strike has today's volume >= min_voi_ratio × open_interest
+    (new positions opened today, not just existing contracts). Rows are
+    ranked by dollar premium flow = volume × mid_price × 100.
+
+    Returns up to ``top_n`` rows across the next ``max_expiries`` expiries.
+    Empty list on any failure — never raises.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        return []
+
+    try:
+        t = yf.Ticker(ticker)
+        expiries = (t.options or [])[:max_expiries]
+        if not expiries:
+            return []
+
+        rows: list[dict] = []
+        for expiry in expiries:
+            try:
+                chain = t.option_chain(expiry)
+            except Exception:
+                continue
+
+            for side, df in (("C", chain.calls), ("P", chain.puts)):
+                if df is None or df.empty:
+                    continue
+                needed = {"strike", "volume", "openInterest", "bid", "ask"}
+                if not needed.issubset(df.columns):
+                    continue
+                d = df.copy()
+                d["volume"] = d["volume"].fillna(0)
+                d["openInterest"] = d["openInterest"].fillna(0)
+                d["bid"] = d["bid"].fillna(0)
+                d["ask"] = d["ask"].fillna(0)
+
+                d = d[d["volume"] >= min_volume]
+                # V/OI ratio — use 1 as floor so brand-new strikes (OI=0)
+                # still rank by absolute volume without exploding to inf.
+                d["voi_ratio"] = d["volume"] / d["openInterest"].clip(lower=1)
+                d = d[d["voi_ratio"] >= min_voi_ratio]
+                if d.empty:
+                    continue
+
+                d["mid"] = (d["bid"] + d["ask"]) / 2
+                # Fall back to lastPrice if bid/ask are zero (illiquid)
+                if "lastPrice" in d.columns:
+                    fallback = d["lastPrice"].fillna(0)
+                    d["mid"] = d["mid"].where(d["mid"] > 0, fallback)
+                d["premium_flow"] = d["volume"] * d["mid"] * 100
+
+                for _, r in d.iterrows():
+                    rows.append({
+                        "side": side,
+                        "strike": float(r["strike"]),
+                        "expiry": expiry,
+                        "volume": int(r["volume"]),
+                        "open_interest": int(r["openInterest"]),
+                        "voi_ratio": float(r["voi_ratio"]),
+                        "mid_price": float(r["mid"]),
+                        "premium_flow": float(r["premium_flow"]),
+                        "iv": (float(r["impliedVolatility"])
+                               if "impliedVolatility" in d.columns
+                               and pd.notna(r.get("impliedVolatility")) else None),
+                    })
+
+        rows.sort(key=lambda x: x["premium_flow"], reverse=True)
+        return rows[:top_n]
+    except Exception:
+        return []

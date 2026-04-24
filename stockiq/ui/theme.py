@@ -234,6 +234,42 @@ DENSE_DARK_CSS = """
       font-weight: 600;
   }
 
+  /* Unusual options panel */
+  .uo-row {
+      display: grid;
+      grid-template-columns: 48px 56px 52px 52px 1fr;
+      column-gap: 8px;
+      font-size: 0.85rem;
+      padding: 6px 0;
+      border-bottom: 1px dashed rgba(148,163,255,0.07);
+      align-items: center;
+  }
+  .uo-row:last-child { border-bottom: none; }
+  .uo-side {
+      font-size: 0.68rem; font-weight: 700;
+      text-align: center; padding: 2px 0; border-radius: 4px;
+      letter-spacing: 0.05em;
+  }
+  .uo-side.up   { background: rgba(34,197,94,0.18); color: #4ade80; }
+  .uo-side.down { background: rgba(239,68,68,0.18); color: #f87171; }
+  .uo-strike {
+      color: #fff; font-weight: 600;
+      font-variant-numeric: tabular-nums;
+  }
+  .uo-exp {
+      color: #94a3b8; font-size: 0.78rem;
+      text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .uo-voi {
+      color: #fbbf24; font-weight: 600;
+      font-variant-numeric: tabular-nums; text-align: right;
+  }
+  .uo-flow {
+      color: #e6ebff; font-weight: 600;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+  }
+
   /* Track record panel */
   .tr-headline {
       display: grid; grid-template-columns: repeat(3, 1fr);

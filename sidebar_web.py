@@ -14,7 +14,7 @@ from plotly.subplots import make_subplots
 
 from stockiq.core.analyzer import UniversalStockAnalyzer
 from stockiq.core.prediction_log import PredictionLog
-from stockiq.data.options import get_options_flow
+from stockiq.data.options import get_options_flow, get_unusual_activity
 from stockiq.data.tickers import POPULAR_TICKERS
 from stockiq.ui.components import (
     earnings_history_block,
@@ -32,6 +32,7 @@ from stockiq.ui.components import (
     panel_open,
     performance_bars,
     probability_scenarios_combined,
+    unusual_options_block,
 )
 from stockiq.ui.theme import inject_theme
 
@@ -156,6 +157,9 @@ options_flow = get_options_flow(
     ticker, spot=(data.get("tech_data") or {}).get("current_price")
 )
 
+# --- Unusual options activity — top strikes with V/OI ≥ 2× ranked by $ premium.
+unusual_opts = get_unusual_activity(ticker, top_n=5, min_voi_ratio=2.0)
+
 hist = data["hist"]
 info = data.get("info", {}) or {}
 tech = data.get("tech_data", {}) or {}
@@ -250,6 +254,9 @@ with c_left:
 
     # Options flow — put/call ratios + ATM IV from nearest expiry
     options_flow_block(options_flow)
+
+    # Unusual options — top strikes with volume >> open interest
+    unusual_options_block(unusual_opts)
 
     if sent:
         label = sent.get("sentiment_label", "NEUTRAL")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Iterable, Optional, Tuple
 
 import pandas as pd
@@ -306,6 +307,46 @@ def options_flow_block(flow: dict) -> None:
             ("Tilt",         f'<span class="{tilt_cls}">{tilt}</span>'),
         ],
         sub=f"expiry {expiry_label}",
+    )
+
+
+def unusual_options_block(rows: list) -> None:
+    """Top unusual-activity strikes across near expiries, ranked by $ premium."""
+    if not rows:
+        return
+
+    def _fmt_flow(v: float) -> str:
+        if v >= 1e6:
+            return f"${v/1e6:.1f}M"
+        if v >= 1e3:
+            return f"${v/1e3:.0f}K"
+        return f"${int(v)}"
+
+    def _fmt_exp(e: str) -> str:
+        try:
+            dt = datetime.strptime(e, "%Y-%m-%d")
+            return dt.strftime("%b%d")
+        except Exception:
+            return e
+
+    html = ""
+    for r in rows:
+        side = r["side"]
+        side_cls = "up" if side == "C" else "down"
+        side_lbl = "CALL" if side == "C" else "PUT"
+        html += (
+            f'<div class="uo-row">'
+            f'<span class="uo-side {side_cls}">{side_lbl}</span>'
+            f'<span class="uo-strike">${r["strike"]:.0f}</span>'
+            f'<span class="uo-exp">{_fmt_exp(r["expiry"])}</span>'
+            f'<span class="uo-voi">{r["voi_ratio"]:.1f}×</span>'
+            f'<span class="uo-flow">{_fmt_flow(r["premium_flow"])}</span>'
+            f'</div>'
+        )
+    st.markdown(
+        panel_open("Unusual options", "V/OI ≥ 2× · ranked by premium $")
+        + html + panel_close(),
+        unsafe_allow_html=True,
     )
 
 
