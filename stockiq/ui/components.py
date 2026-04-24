@@ -149,7 +149,7 @@ def external_links(ticker: str, info: dict) -> None:
         for label, url in links
     )
     st.markdown(
-        f'<div class="ext-row"><span class="ext-label">More</span>{anchors}{website_link}</div>',
+        f'<div class="ext-row"><span class="ext-label">Sources</span>{anchors}{website_link}</div>',
         unsafe_allow_html=True,
     )
 
