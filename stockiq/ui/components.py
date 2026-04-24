@@ -160,9 +160,18 @@ def external_links(ticker: str, info: dict) -> None:
 # Panels / stats
 # ---------------------------------------------------------------------------
 
-def panel_open(title: str, sub: str = "") -> str:
-    sub_html = f'<span class="panel-h-sub">{sub}</span>' if sub else ""
-    return f'<div class="panel"><div class="panel-h"><span>{title}</span>{sub_html}</div>'
+def panel_open(title: str, sub: str = "", right_html: str = "") -> str:
+    """Open a panel container with a header row.
+
+    ``right_html`` (when provided) renders in the header's right slot
+    instead of the text ``sub``, letting callers inject rich content like
+    performance pills alongside the title.
+    """
+    if right_html:
+        right = right_html
+    else:
+        right = f'<span class="panel-h-sub">{sub}</span>' if sub else ""
+    return f'<div class="panel"><div class="panel-h"><span>{title}</span>{right}</div>'
 
 
 def panel_close() -> str:
@@ -648,12 +657,8 @@ def performance_bars(tech: dict) -> None:
                 unsafe_allow_html=True)
 
 
-def performance_strip(tech: dict) -> None:
-    """Thin horizontal strip of 1D/5D/1M/3M/1Y returns as colored pills.
-
-    Intended to sit directly under the price chart — much less vertical
-    space than performance_bars. No panel chrome.
-    """
+def performance_pills_html(tech: dict) -> str:
+    """Build the inline pills HTML string (reusable in headers)."""
     periods = [
         ("1D", tech.get("performance_1d")),
         ("5D", tech.get("performance_5d")),
@@ -676,4 +681,13 @@ def performance_strip(tech: dict) -> None:
             f'<span class="ps-lbl">{label}</span>'
             f'<span class="ps-val">{fmt_pct(v, decimals=1)}</span></span>'
         )
-    st.markdown(f'<div class="ps-row">{pills}</div>', unsafe_allow_html=True)
+    return f'<span class="ps-row">{pills}</span>'
+
+
+def performance_strip(tech: dict) -> None:
+    """Thin horizontal strip of 1D/5D/1M/3M/1Y returns as colored pills.
+
+    Standalone variant — most callers use performance_pills_html() to
+    embed pills inside another panel's header.
+    """
+    st.markdown(performance_pills_html(tech), unsafe_allow_html=True)

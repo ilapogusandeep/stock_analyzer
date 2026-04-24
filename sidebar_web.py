@@ -35,7 +35,7 @@ def _import_stockiq_modules():
             fmt_pct_ratio, fmt_price, fmt_ratio, header_band,
             institutional_holders_block, kv_block, news_feed_block,
             options_flow_block, panel_close, panel_open, performance_bars,
-            performance_strip, probability_scenarios_combined,
+            performance_pills_html, probability_scenarios_combined,
             unusual_options_block,
         )
         from stockiq.ui.theme import inject_theme
@@ -347,15 +347,15 @@ with c_mid:
     fig.update_yaxes(range=[0, 100], row=3, col=1)
 
     st.markdown(
-        panel_open(f"{ticker} · 1Y price · volume · RSI", "SMA20/50/200 · BB(20,2)")
+        panel_open(
+            f"{ticker} · 1Y price · volume · RSI",
+            right_html=performance_pills_html(tech),
+        )
         + '<div style="margin:-2px 0 -4px;">',
         unsafe_allow_html=True,
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
     st.markdown("</div>" + panel_close(), unsafe_allow_html=True)
-
-    # Compact performance strip — one horizontal row under the chart.
-    performance_strip(tech)
 
     mid_l, mid_r = st.columns(2)
     with mid_l:

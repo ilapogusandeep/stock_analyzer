@@ -286,24 +286,26 @@ DENSE_DARK_CSS = """
       font-variant-numeric: tabular-nums;
   }
 
-  /* Performance strip (under chart) */
+  /* Performance pills (embedded in panel header) */
   .ps-row {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin: 4px 0 8px;
+      display: inline-flex;
+      gap: 4px;
+      flex-wrap: nowrap;
+      align-items: center;
   }
   .ps-pill {
-      display: inline-flex; gap: 6px; align-items: baseline;
-      padding: 3px 10px;
+      display: inline-flex; gap: 4px; align-items: baseline;
+      padding: 2px 7px;
       background: rgba(148,163,255,0.05);
       border: 1px solid rgba(148,163,255,0.10);
-      border-radius: 12px;
-      font-size: 0.78rem;
+      border-radius: 10px;
+      font-size: 0.70rem;
       font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+      text-transform: none;
   }
   .ps-pill .ps-lbl {
-      color: #94a3b8; font-size: 0.68rem;
+      color: #94a3b8; font-size: 0.62rem;
       text-transform: uppercase; letter-spacing: 0.05em;
       font-weight: 600;
   }
