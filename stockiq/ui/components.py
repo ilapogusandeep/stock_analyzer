@@ -200,6 +200,84 @@ def probability_bars(probs: dict, title: str = "Scenario probability") -> None:
     st.markdown(panel_open(title) + body + panel_close(), unsafe_allow_html=True)
 
 
+def probability_scenarios_combined(probs: dict, targets: dict, current: Optional[float]) -> None:
+    """One panel that shows probability bar + target price + % delta per
+    direction, saving a slot in the right column for other content."""
+    rows_spec = [
+        ("Bullish", "bullish", "pb-bull"),
+        ("Neutral", "neutral", "pb-neut"),
+        ("Bearish", "bearish", "pb-bear"),
+    ]
+    body = ""
+    for label, key, cls in rows_spec:
+        p = max(0.0, min(1.0, float(probs.get(key, 0) or 0)))
+        tgt = targets.get(key)
+        if tgt is None or current is None:
+            tgt_str, delta_str, delta_cls = "—", "—", "flat"
+        else:
+            tgt_str = fmt_price(tgt)
+            delta = (tgt / current - 1) * 100
+            delta_str = fmt_pct(delta, decimals=1)
+            delta_cls = _cls(delta)
+        body += (
+            f'<div class="pbx-row">'
+            f'<div class="pbx-label">{label}</div>'
+            f'<div class="pb-bar"><div class="pb-fill {cls}" style="width:{p*100:.1f}%"></div></div>'
+            f'<div class="pbx-pct">{p*100:.1f}%</div>'
+            f'<div class="pbx-tgt">{tgt_str}</div>'
+            f'<div class="pbx-delta {delta_cls}">{delta_str}</div>'
+            f'</div>'
+        )
+    st.markdown(
+        panel_open("AI scenario & targets", "12m horizon") + body + panel_close(),
+        unsafe_allow_html=True,
+    )
+
+
+def earnings_history_block(history: list) -> None:
+    """Render past earnings — quarter, actual vs estimate EPS, surprise %."""
+    if not history:
+        return
+
+    def _safe_num(v, fmt: str = "{:.2f}") -> str:
+        try:
+            if v is None or v == "N/A":
+                return "—"
+            return fmt.format(float(v))
+        except Exception:
+            return "—"
+
+    header = (
+        '<div class="eh-row eh-head">'
+        '<div>Quarter</div><div>Est</div><div>Actual</div><div>Surprise</div>'
+        '</div>'
+    )
+    body = ""
+    for row in history[:4]:  # last 4 quarters
+        # yfinance returns surprise_percent as a 0..1 fraction (e.g. 0.0169
+        # for a 1.69% beat), so scale to percent before formatting.
+        surprise = row.get("surprise_percent")
+        try:
+            spct = float(surprise) * 100 if surprise not in (None, "N/A") else None
+        except Exception:
+            spct = None
+        surprise_cls = _cls(spct) if spct is not None else "flat"
+        surprise_str = fmt_pct(spct, decimals=1) if spct is not None else "—"
+        body += (
+            f'<div class="eh-row">'
+            f'<div class="eh-q">{row.get("quarter", "—")}</div>'
+            f'<div class="eh-v">{_safe_num(row.get("estimate_eps"))}</div>'
+            f'<div class="eh-v">{_safe_num(row.get("actual_eps"))}</div>'
+            f'<div class="eh-v {surprise_cls}">{surprise_str}</div>'
+            f'</div>'
+        )
+    st.markdown(
+        panel_open("Earnings history", f"last {min(len(history), 4)} Q")
+        + header + body + panel_close(),
+        unsafe_allow_html=True,
+    )
+
+
 def scenario_block(targets: dict, current: Optional[float]) -> None:
     def _row(label, v, cls):
         if v is None or current is None:

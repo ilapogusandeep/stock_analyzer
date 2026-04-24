@@ -15,6 +15,7 @@ from plotly.subplots import make_subplots
 from stockiq.core.analyzer import UniversalStockAnalyzer
 from stockiq.data.tickers import POPULAR_TICKERS
 from stockiq.ui.components import (
+    earnings_history_block,
     external_links,
     fmt_big_money,
     fmt_pct,
@@ -26,8 +27,7 @@ from stockiq.ui.components import (
     panel_close,
     panel_open,
     performance_bars,
-    probability_bars,
-    scenario_block,
+    probability_scenarios_combined,
 )
 from stockiq.ui.theme import inject_theme
 
@@ -322,13 +322,27 @@ with c_mid:
 
 with c_right:
     if ml:
-        probs = ml.get("scenario_probabilities", {}) or {}
-        probability_bars(probs, title="AI scenario")
-        scenario_block(
+        probability_scenarios_combined(
+            ml.get("scenario_probabilities", {}) or {},
             ml.get("scenario_targets", {}) or {},
             tech.get("current_price"),
         )
+    else:
+        st.markdown(
+            panel_open("AI scenario & targets")
+            + "<div class='sent-label'>Fast mode — ML skipped.</div>"
+            + panel_close(),
+            unsafe_allow_html=True,
+        )
 
+    # Earnings history (from yfinance via institutional_data)
+    earnings_hist = (
+        (inst.get("earnings_data") or {}).get("history", [])
+        if isinstance(inst, dict) else []
+    )
+    earnings_history_block(earnings_hist)
+
+    if ml:
         shap_exp = ml.get("shap_explanations") or {}
         top = shap_exp.get("top_features") or ml.get("feature_importance") or []
         if top:
@@ -341,13 +355,6 @@ with c_right:
                 kv_block("Top features", rows, sub="importance")
             except Exception:
                 pass
-    else:
-        st.markdown(
-            panel_open("AI scenario")
-            + "<div class='sent-label'>Fast mode — ML skipped.</div>"
-            + panel_close(),
-            unsafe_allow_html=True,
-        )
 
     if bt:
         kv_block(

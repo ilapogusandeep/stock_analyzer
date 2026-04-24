@@ -195,7 +195,41 @@ DENSE_DARK_CSS = """
   .pb-neut { background: linear-gradient(90deg, #64748b, #94a3b8); }
   .pb-bear { background: linear-gradient(90deg, #dc2626, #ef4444); }
 
-  /* Scenario row */
+  /* Combined AI scenario + target row
+     cols: label | bar | prob%  | target$ | delta% */
+  .pbx-row {
+      display: grid;
+      grid-template-columns: 64px 1fr 48px 68px 52px;
+      gap: 8px; align-items: center;
+      font-size: 0.88rem; margin: 7px 0;
+  }
+  .pbx-label { color: #cbd5e1; font-weight: 600; }
+  .pbx-pct   { color: #fff; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .pbx-tgt   { color: #f1f5f9; text-align: right; font-variant-numeric: tabular-nums; }
+  .pbx-delta { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* Earnings history table */
+  .eh-row {
+      display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 6px;
+      font-size: 0.85rem; padding: 5px 0;
+      border-bottom: 1px dashed rgba(148,163,255,0.08);
+      font-variant-numeric: tabular-nums;
+  }
+  .eh-row:last-child { border-bottom: none; }
+  .eh-row.eh-head {
+      font-size: 0.68rem; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      border-bottom: 1px solid rgba(148,163,255,0.15);
+      padding-bottom: 4px; margin-bottom: 2px;
+  }
+  .eh-row.eh-head > div:not(:first-child),
+  .eh-row .eh-v { text-align: right; }
+  .eh-q { color: #cbd5e1; font-weight: 600; }
+  .eh-v { color: #f1f5f9; }
+  .eh-v.up   { color: #4ade80; font-weight: 600; }
+  .eh-v.down { color: #f87171; font-weight: 600; }
+
+  /* Scenario row (legacy, kept for backward compat) */
   .scen {
       display: grid; grid-template-columns: 80px 1fr 1fr; gap: 10px;
       font-size: 0.9rem; padding: 6px 0; border-bottom: 1px dashed rgba(148,163,255,0.08);
