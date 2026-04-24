@@ -172,7 +172,7 @@ options_flow = get_options_flow(
 )
 
 # --- Unusual options activity — top strikes with V/OI ≥ 2× ranked by $ premium.
-unusual_opts = get_unusual_activity(ticker, top_n=5, min_voi_ratio=2.0)
+unusual_opts = get_unusual_activity(ticker, top_n=3, min_voi_ratio=2.0)
 
 hist = data["hist"]
 info = data.get("info", {}) or {}
@@ -268,25 +268,6 @@ with c_left:
 
     # Options flow — put/call ratios + ATM IV from nearest expiry
     options_flow_block(options_flow)
-
-    # Unusual options — top strikes with volume >> open interest
-    unusual_options_block(unusual_opts)
-
-    if sent:
-        label = sent.get("sentiment_label", "NEUTRAL")
-        label_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(label, "⚪")
-        kv_block(
-            "Sentiment",
-            [
-                ("Label",      f"{label_emoji} {label}"),
-                ("Overall",    f"{sent.get('overall_sentiment', 0):+.3f}"),
-                ("News",       f"{sent.get('news_sentiment', 0):+.3f}"),
-                ("Social",     f"{sent.get('social_sentiment', 0):+.3f}"),
-                ("News Count", str(sent.get("news_count", 0))),
-                ("Confidence", fmt_pct_ratio(sent.get("confidence"), 0)),
-            ],
-            sub="multi-source",
-        )
 
 
 # ---- Middle column: price chart + technicals + performance -----------------
@@ -390,6 +371,50 @@ with c_mid:
     with mid_r:
         performance_bars(tech)
 
+    # --- Analyst consensus + multi-source sentiment (merged) ----------------
+    rec_key = info.get("recommendationKey", "") or ""
+    rec_emoji = {
+        "strong_buy": "🟢", "buy": "🟢",
+        "hold": "🟡",
+        "underperform": "🔴", "sell": "🔴", "strong_sell": "🔴",
+    }.get(rec_key.lower(), "⚪")
+    rec_mean = info.get("recommendationMean")
+    n_analysts = info.get("numberOfAnalystOpinions")
+    tgt_mean = info.get("targetMeanPrice")
+    tgt_low = info.get("targetLowPrice")
+    tgt_high = info.get("targetHighPrice")
+    current_px = tech.get("current_price")
+
+    implied_upside = "—"
+    if tgt_mean and current_px:
+        implied_upside = fmt_pct((tgt_mean / current_px - 1) * 100, decimals=1)
+
+    sent_label = (sent or {}).get("sentiment_label", "NEUTRAL") if sent else "—"
+    sent_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(sent_label, "⚪")
+
+    rows = []
+    if n_analysts or tgt_mean or rec_mean:
+        rows += [
+            ("Rating",         f"{rec_emoji} {rec_key.replace('_', ' ').upper() or '—'}"),
+            ("Score (1–5)",    fmt_ratio(rec_mean, 2) if rec_mean else "—"),
+            ("Analysts",       str(int(n_analysts)) if n_analysts else "—"),
+            ("Target Mean",    fmt_price(tgt_mean) if tgt_mean else "—"),
+            ("Target Range",   (f"{fmt_price(tgt_low)} – {fmt_price(tgt_high)}"
+                                if (tgt_low and tgt_high) else "—")),
+            ("Implied Upside", implied_upside),
+        ]
+    if sent:
+        rows += [
+            ("Sentiment",   f"{sent_emoji} {sent_label}"),
+            ("Overall",     f"{sent.get('overall_sentiment', 0):+.3f}"),
+            ("News score",  f"{sent.get('news_sentiment', 0):+.3f}"),
+            ("Social",      f"{sent.get('social_sentiment', 0):+.3f}"),
+            ("News count",  str(sent.get("news_count", 0))),
+            ("Confidence",  fmt_pct_ratio(sent.get("confidence"), 0)),
+        ]
+    if rows:
+        kv_block("Analyst & sentiment", rows, sub="12m targets · multi-source")
+
 
 # ---- Right column: AI predictions + backtest --------------------------------
 
@@ -415,68 +440,8 @@ with c_right:
     )
     earnings_history_block(earnings_hist)
 
-    # --- Analyst consensus (from yfinance info) ---
-    rec_key = info.get("recommendationKey", "") or ""
-    rec_emoji = {
-        "strong_buy": "🟢", "buy": "🟢",
-        "hold": "🟡",
-        "underperform": "🔴", "sell": "🔴", "strong_sell": "🔴",
-    }.get(rec_key.lower(), "⚪")
-    rec_mean = info.get("recommendationMean")  # 1.0 best, 5.0 worst
-    n_analysts = info.get("numberOfAnalystOpinions")
-    tgt_mean = info.get("targetMeanPrice")
-    tgt_low = info.get("targetLowPrice")
-    tgt_high = info.get("targetHighPrice")
-    current_px = tech.get("current_price")
-
-    implied_upside = "—"
-    implied_cls = "flat"
-    if tgt_mean and current_px:
-        u = (tgt_mean / current_px - 1) * 100
-        implied_upside = fmt_pct(u, decimals=1)
-        implied_cls = "up" if u > 0 else "down" if u < 0 else "flat"
-
-    if n_analysts or tgt_mean or rec_mean:
-        kv_block(
-            "Analyst consensus",
-            [
-                ("Rating",          f"{rec_emoji} {rec_key.replace('_', ' ').upper() or '—'}"),
-                ("Score (1–5)",     fmt_ratio(rec_mean, 2) if rec_mean else "—"),
-                ("Analysts",        str(int(n_analysts)) if n_analysts else "—"),
-                ("Target Mean",     fmt_price(tgt_mean) if tgt_mean else "—"),
-                ("Target Range",    (f"{fmt_price(tgt_low)} – {fmt_price(tgt_high)}"
-                                     if (tgt_low and tgt_high) else "—")),
-                ("Implied Upside",  implied_upside),
-            ],
-            sub="12m price targets",
-        )
-
-    if bt:
-        alpha_spy = bt.get("alpha_vs_spy")
-        alpha_bh = bt.get("alpha_vs_buy_hold")
-        kv_block(
-            "Backtest",
-            [
-                ("Win Rate",     fmt_pct_ratio(bt.get("win_rate"), 1)),
-                ("Total Return", fmt_pct_ratio(bt.get("strategy_total_return"), 1)),
-                ("Sharpe",       fmt_ratio(bt.get("sharpe_ratio"), 2)),
-                ("Max DD",       fmt_pct_ratio(bt.get("max_drawdown"), 1)),
-                ("Accuracy",     fmt_pct_ratio(bt.get("prediction_accuracy"), 1)),
-                ("Trades",       str(bt.get("total_trades", 0))),
-                ("SPY B&H",      fmt_pct_ratio(bt.get("benchmark_spy_return"), 1) if bt.get("benchmark_spy_return") is not None else "—"),
-                ("vs SPY",       fmt_pct_ratio(alpha_spy, 1) if alpha_spy is not None else "—"),
-                (f"{ticker} B&H", fmt_pct_ratio(bt.get("buy_hold_return"), 1)),
-                ("vs B&H",       fmt_pct_ratio(alpha_bh, 1) if alpha_bh is not None else "—"),
-            ],
-            sub=f"{bt.get('backtest_period', '—')} · {bt.get('enhanced_features', 0)} feat",
-        )
-    else:
-        st.markdown(
-            panel_open("Backtest")
-            + "<div class='sent-label'>—</div>"
-            + panel_close(),
-            unsafe_allow_html=True,
-        )
+    # Unusual options — top strikes with volume >> open interest
+    unusual_options_block(unusual_opts)
 
     # News feed — per-article headlines + sentiment that fed the model.
     news_feed_block(sent.get("articles") or [], max_items=6)
