@@ -208,6 +208,32 @@ DENSE_DARK_CSS = """
   .pbx-tgt   { color: #f1f5f9; text-align: right; font-variant-numeric: tabular-nums; }
   .pbx-delta { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
+  /* News feed panel */
+  .nf-row {
+      display: grid;
+      grid-template-columns: 18px 1fr 48px;
+      column-gap: 8px;
+      font-size: 0.82rem;
+      padding: 5px 0;
+      border-bottom: 1px dashed rgba(148,163,255,0.07);
+      align-items: start;
+  }
+  .nf-row:last-child { border-bottom: none; }
+  .nf-dot { color: #94a3b8; }
+  .nf-h { color: #e6ebff; line-height: 1.3; }
+  .nf-src {
+      display: inline-block;
+      color: #64748b;
+      font-size: 0.68rem;
+      margin-left: 6px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .nf-score {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+  }
+
   /* Track record panel */
   .tr-headline {
       display: grid; grid-template-columns: repeat(3, 1fr);

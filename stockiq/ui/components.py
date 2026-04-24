@@ -235,6 +235,39 @@ def probability_scenarios_combined(probs: dict, targets: dict, current: Optional
     )
 
 
+def news_feed_block(articles: list, max_items: int = 6) -> None:
+    """Show the actual headlines + per-article sentiment score that fed the
+    model. Transparency so users can see the 'evidence'."""
+    if not articles:
+        return
+
+    rows = ""
+    for a in articles[:max_items]:
+        score = a.get("score") or 0.0
+        cls = _cls(score)
+        emoji = "🟢" if score > 0.1 else "🔴" if score < -0.1 else "⚪"
+        src = (a.get("source") or "").strip()
+        src_html = f' <span class="nf-src">{src[:22]}</span>' if src else ""
+        headline = (a.get("headline") or "").strip()[:140]
+        # Escape minimal HTML to avoid broken markup from headlines
+        headline = (headline.replace("&", "&amp;")
+                            .replace("<", "&lt;")
+                            .replace(">", "&gt;"))
+        rows += (
+            f'<div class="nf-row">'
+            f'<span class="nf-dot">{emoji}</span>'
+            f'<span class="nf-h">{headline}</span>'
+            f'<span class="nf-score {cls}">{score:+.2f}</span>'
+            f'{src_html}'
+            f'</div>'
+        )
+    st.markdown(
+        panel_open("News feed", f"top {min(len(articles), max_items)} headlines")
+        + rows + panel_close(),
+        unsafe_allow_html=True,
+    )
+
+
 def options_flow_block(flow: dict) -> None:
     """Small panel summarizing near-term options activity."""
     if not flow:

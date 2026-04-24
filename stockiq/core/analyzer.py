@@ -534,19 +534,34 @@ class UniversalStockAnalyzer:
             from enhanced_data_collector import EnhancedDataCollector
             collector = EnhancedDataCollector(self.ticker)
             enhanced_sentiment = collector.get_enhanced_sentiment_score(enhanced_data)
-            
+
+            # Preserve the per-article headline/score/source triples so the
+            # UI can show "which articles actually drove the sentiment".
+            ns = enhanced_data.get('news_sentiment', {}) or {}
+            headlines = ns.get('headlines') or []
+            scores = ns.get('sentiment_scores') or []
+            sources = ns.get('sources') or []
+            articles = []
+            for i, h in enumerate(headlines[:20]):
+                articles.append({
+                    'headline': str(h),
+                    'score': float(scores[i]) if i < len(scores) else 0.0,
+                    'source': str(sources[i]) if i < len(sources) else '',
+                })
+
             return {
                 'sentiment_label': enhanced_sentiment['label'],
                 'overall_sentiment': enhanced_sentiment['enhanced_sentiment'],
                 'confidence': enhanced_sentiment['confidence'],
-                'news_sentiment': enhanced_data.get('news_sentiment', {}).get('overall_sentiment', 0),
+                'news_sentiment': ns.get('overall_sentiment', 0),
                 'social_sentiment': enhanced_data.get('social_sentiment', {}).get('sentiment', 0),
                 'analyst_sentiment': enhanced_data.get('analyst_data', {}).get('rating_mean', 0),
                 'options_sentiment': enhanced_data.get('options_data', {}).get('sentiment', 'NEUTRAL'),
-                'news_count': enhanced_data.get('news_sentiment', {}).get('news_count', 0),
-                'positive_ratio': enhanced_data.get('news_sentiment', {}).get('positive_ratio', 0.5),
+                'news_count': ns.get('news_count', 0),
+                'positive_ratio': ns.get('positive_ratio', 0.5),
                 'breakdown': enhanced_sentiment.get('breakdown', {}),
-                'sources': enhanced_data.get('news_sentiment', {}).get('sources', [])
+                'sources': sources,
+                'articles': articles,
             }
         except Exception as e:
             print(f"⚠️ Enhanced sentiment processing error: {e}")

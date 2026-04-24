@@ -26,6 +26,7 @@ from stockiq.ui.components import (
     fmt_ratio,
     header_band,
     kv_block,
+    news_feed_block,
     options_flow_block,
     panel_close,
     panel_open,
@@ -470,6 +471,9 @@ with c_right:
             + panel_close(),
             unsafe_allow_html=True,
         )
+
+    # News feed — per-article headlines + sentiment that fed the model.
+    news_feed_block(sent.get("articles") or [], max_items=6)
 
     # Track record — renders the prediction log + calibration summary.
     try:
