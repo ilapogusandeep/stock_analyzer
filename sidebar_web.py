@@ -32,7 +32,6 @@ from stockiq.ui.components import (
     panel_open,
     performance_bars,
     probability_scenarios_combined,
-    track_record_block,
 )
 from stockiq.ui.theme import inject_theme
 
@@ -460,12 +459,6 @@ with c_right:
 
     # News feed — per-article headlines + sentiment that fed the model.
     news_feed_block(sent.get("articles") or [], max_items=6)
-
-    # Track record — renders the prediction log + calibration summary.
-    try:
-        track_record_block(_pred_log.summary())
-    except Exception as e:
-        st.caption(f"(track record unavailable: {e})")
 
 
 st.markdown(
