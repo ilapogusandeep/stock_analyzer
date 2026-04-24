@@ -358,17 +358,32 @@ class UniversalStockAnalyzer:
             sentiment_data = self.analyze_sentiment() if show_sentiment else {'sentiment_label': 'NEUTRAL', 'overall_sentiment': 0, 'news_sentiment': 0, 'social_sentiment': 0, 'news_count': 0, 'positive_ratio': 0.5, 'confidence': 0.5}
         
         earnings_data = self.get_earnings_calendar() if show_fundamentals else {'earnings_expected': False, 'next_earnings_date': None, 'days_to_earnings': 0, 'volatility_expected': False}
-        
-        # Enhanced ML prediction with multiple data sources
-        ml_prediction = None
+
+        # Sector ETF history (for peer-relative-strength feature). Fetched
+        # once per analysis and reused across both ML horizons. None on
+        # any failure -> features default to zero (no signal).
+        sector_etf_hist = self._fetch_sector_etf_history(info)
+
+        # Enhanced ML prediction at multiple horizons.
+        ml_prediction = None       # 1 week  (5 trading days)
+        ml_prediction_1m = None    # 1 month (21 trading days)
         if show_ml and ML_AVAILABLE:
-            ml_prediction = self.create_enhanced_ml_prediction(hist, tech_data, fundamental_data, sentiment_data, enhanced_data)
-        
+            ml_prediction = self.create_enhanced_ml_prediction(
+                hist, tech_data, fundamental_data, sentiment_data,
+                enhanced_data, institutional_data=institutional_data,
+                sector_etf_hist=sector_etf_hist, horizon_days=5,
+            )
+            ml_prediction_1m = self.create_enhanced_ml_prediction(
+                hist, tech_data, fundamental_data, sentiment_data,
+                enhanced_data, institutional_data=institutional_data,
+                sector_etf_hist=sector_etf_hist, horizon_days=21,
+            )
+
         # Enhanced backtesting with ML validation
         backtest_results = None
         if show_ml and ML_AVAILABLE and len(hist) > 100:  # Need minimum data for backtesting
             backtest_results = self.enhanced_backtest_strategy(hist, tech_data, fundamental_data, sentiment_data, enhanced_data)
-        
+
         return {
             'hist': hist,
             'info': info,
@@ -377,9 +392,45 @@ class UniversalStockAnalyzer:
             'sentiment_data': sentiment_data,
             'earnings_data': earnings_data,
             'ml_prediction': ml_prediction,
+            'ml_prediction_1m': ml_prediction_1m,
             'backtest_results': backtest_results,
-            'institutional_data': institutional_data
+            'institutional_data': institutional_data,
         }
+
+    SECTOR_ETF_MAP = {
+        'Technology': 'XLK',
+        'Financial Services': 'XLF',
+        'Healthcare': 'XLV',
+        'Consumer Cyclical': 'XLY',
+        'Consumer Defensive': 'XLP',
+        'Industrials': 'XLI',
+        'Energy': 'XLE',
+        'Communication Services': 'XLC',
+        'Utilities': 'XLU',
+        'Real Estate': 'XLRE',
+        'Basic Materials': 'XLB',
+    }
+
+    def _fetch_sector_etf_history(self, info):
+        """Map ticker.info['sector'] to a Select-Sector SPDR ETF and pull
+        its 1-year price history. Returns DataFrame or None on failure.
+        """
+        try:
+            import yfinance as yf
+        except Exception:
+            return None
+        try:
+            sector = (info or {}).get('sector') or ''
+            etf_symbol = self.SECTOR_ETF_MAP.get(sector)
+            if not etf_symbol:
+                return None
+            etf_hist = yf.Ticker(etf_symbol).history(period='1y')
+            if etf_hist is None or etf_hist.empty:
+                return None
+            return etf_hist
+        except Exception as e:
+            print(f"⚠️ sector ETF fetch error: {e}")
+            return None
     
     def compute_technical_indicators(self, hist):
         """Compute comprehensive technical indicators"""
@@ -996,34 +1047,57 @@ class UniversalStockAnalyzer:
         else:
             return f"{scenario}. Mixed signals across technical indicators."
     
-    def create_enhanced_ml_prediction(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data):
-        """Create enhanced ML prediction with multiple data sources"""
+    def create_enhanced_ml_prediction(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data, institutional_data=None, sector_etf_hist=None, horizon_days=5):
+        """Create enhanced ML prediction with multiple data sources.
+
+        ``horizon_days`` controls the prediction window:
+        - 5 = 1 week of trading days
+        - 21 = 1 month of trading days
+        - 63 = 3 months of trading days
+
+        Train/test split is chronological (no random shuffle) so reported
+        accuracy reflects honest walk-forward performance, not in-sample
+        leakage.
+        """
         if not ML_AVAILABLE:
             return None
-        
+
         try:
             from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-            from sklearn.model_selection import train_test_split
             from sklearn.preprocessing import StandardScaler
             import shap
-            
+
             # Prepare enhanced features
-            features = self._create_enhanced_features(hist, tech_data, fundamental_data, sentiment_data, enhanced_data)
-            
+            features = self._create_enhanced_features(
+                hist, tech_data, fundamental_data, sentiment_data,
+                enhanced_data, institutional_data=institutional_data,
+                sector_etf_hist=sector_etf_hist,
+            )
+
             if len(features) < 50:  # Need minimum data for ML
                 return None
-            
-            # Create labels (next day direction)
-            labels = (hist['Close'].shift(-1) > hist['Close']).astype(int)
-            labels = labels.dropna()
-            
+
+            # Create labels: did Close[t+horizon] beat Close[t]?
+            labels = (hist['Close'].shift(-horizon_days) > hist['Close']).astype(int)
+            # Drop rows where the future close is unknown (last horizon_days)
+            labels = labels.iloc[: len(labels) - horizon_days]
+
             # Align features and labels
             min_len = min(len(features), len(labels))
             features = features.iloc[:min_len]
             labels = labels.iloc[:min_len]
-            
-            # Split data
-            X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
+
+            if min_len < 50:
+                return None
+
+            # Chronological 80/20 split — no shuffle so we evaluate on
+            # the most recent slice only, the only honest backtest for
+            # time series.
+            split_idx = int(min_len * 0.8)
+            X_train = features.iloc[:split_idx]
+            X_test = features.iloc[split_idx:]
+            y_train = labels.iloc[:split_idx]
+            y_test = labels.iloc[split_idx:]
             
             # Scale features
             scaler = StandardScaler()
@@ -1082,29 +1156,41 @@ class UniversalStockAnalyzer:
                 direction = "NEUTRAL"
                 confidence = neutral_prob
             
-            # Calculate price target
+            # Calculate price target — scale move size with horizon. Use
+            # rolling 20d realized volatility as the per-day move; total
+            # expected magnitude over the horizon is vol * sqrt(horizon).
             current_price = tech_data['current_price']
+            try:
+                daily_vol = float(hist['Close'].pct_change().rolling(20).std().iloc[-1])
+            except Exception:
+                daily_vol = 0.015  # ~1.5% / day default
+            if not (daily_vol and daily_vol > 0):
+                daily_vol = 0.015
+            horizon_move = daily_vol * (horizon_days ** 0.5)  # ~1 sigma move
+
+            up_mult = 1 + horizon_move * (0.5 + bullish_prob)  # 0.5..1.5 sigma
+            dn_mult = 1 - horizon_move * (0.5 + bearish_prob)
             if direction == "BULLISH":
-                price_target = current_price * (1 + bullish_prob * 0.1)  # Up to 10% upside
-                expected_return = bullish_prob * 0.1
+                price_target = current_price * up_mult
+                expected_return = up_mult - 1
             elif direction == "BEARISH":
-                price_target = current_price * (1 - bearish_prob * 0.08)  # Up to 8% downside
-                expected_return = -bearish_prob * 0.08
+                price_target = current_price * dn_mult
+                expected_return = dn_mult - 1
             else:
                 price_target = current_price
                 expected_return = 0
-            
-            # Scenario probabilities
+
             scenario_probabilities = {
                 'bullish': bullish_prob,
                 'neutral': neutral_prob,
-                'bearish': bearish_prob
+                'bearish': bearish_prob,
             }
-            
+            # Use fixed 1-sigma extremes for the scenario panel (more
+            # comparable across tickers than confidence-weighted points).
             scenario_targets = {
-                'bullish': current_price * 1.1,
+                'bullish': current_price * (1 + horizon_move),
                 'neutral': current_price,
-                'bearish': current_price * 0.92
+                'bearish': current_price * (1 - horizon_move),
             }
             
             # SHAP explanations
@@ -1166,6 +1252,7 @@ class UniversalStockAnalyzer:
                     })
             
             return {
+                'horizon_days': horizon_days,
                 'direction': direction,
                 'confidence': confidence,
                 'price_target': price_target,
@@ -1183,16 +1270,56 @@ class UniversalStockAnalyzer:
             print(f"❌ Enhanced ML prediction error: {e}")
             return self.create_ml_prediction(hist, tech_data, fundamental_data, sentiment_data)
     
-    def _create_enhanced_features(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data):
+    def _create_enhanced_features(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data, institutional_data=None, sector_etf_hist=None):
         """Create enhanced feature set from multiple data sources"""
         try:
             # Basic technical features
             features = pd.DataFrame(index=hist.index)
-            
+
             # Price features
             features['returns_1d'] = hist['Close'].pct_change(1)
             features['returns_5d'] = hist['Close'].pct_change(5)
             features['returns_20d'] = hist['Close'].pct_change(20)
+
+            # Peer / sector relative strength — rolling, so the model can
+            # learn from how this ticker has been trading vs its sector
+            # ETF over time. Feature is 0 when sector data is unavailable.
+            features['sector_rel_1m'] = 0.0
+            features['sector_rel_3m'] = 0.0
+            if sector_etf_hist is not None and not sector_etf_hist.empty:
+                try:
+                    etf_close = sector_etf_hist['Close'].reindex(hist.index, method='ffill')
+                    ticker_ret_1m = (hist['Close'] / hist['Close'].shift(22)) - 1
+                    etf_ret_1m = (etf_close / etf_close.shift(22)) - 1
+                    features['sector_rel_1m'] = (ticker_ret_1m - etf_ret_1m).fillna(0)
+                    ticker_ret_3m = (hist['Close'] / hist['Close'].shift(63)) - 1
+                    etf_ret_3m = (etf_close / etf_close.shift(63)) - 1
+                    features['sector_rel_3m'] = (ticker_ret_3m - etf_ret_3m).fillna(0)
+                except Exception:
+                    pass
+
+            # 13F institutional net flow — value-weighted average of the
+            # quarterly position change among top holders. Positive ->
+            # institutions accumulating; negative -> trimming. Static per
+            # analysis (single value broadcast across rows).
+            inst_net_flow = 0.0
+            if isinstance(institutional_data, dict):
+                holders = (institutional_data.get('institutional_holders') or {}).get('top_holders', [])
+                if holders:
+                    num = 0.0
+                    den = 0.0
+                    for h in holders:
+                        try:
+                            v = float(h.get('value') or 0)
+                            chg = float(h.get('pct_change') or 0)
+                            if v > 0:
+                                num += chg * v
+                                den += v
+                        except (TypeError, ValueError):
+                            continue
+                    if den > 0:
+                        inst_net_flow = num / den
+            features['inst_net_flow'] = inst_net_flow
             
             # Technical indicators
             features['rsi'] = self._calculate_rsi(hist['Close'])

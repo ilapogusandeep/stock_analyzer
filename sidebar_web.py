@@ -190,6 +190,7 @@ tech = data.get("tech_data", {}) or {}
 fund = data.get("fundamental_data", {}) or {}
 sent = data.get("sentiment_data", {}) or {}
 ml = data.get("ml_prediction") or {}
+ml_1m = data.get("ml_prediction_1m") or {}
 bt = data.get("backtest_results") or {}
 inst = data.get("institutional_data", {}) or {}
 
@@ -449,18 +450,39 @@ with c_mid:
 # ---- Right column: AI predictions + backtest --------------------------------
 
 with c_right:
+    def _accuracy_sub(pred: dict, horizon_label: str) -> str:
+        """Build a subtitle showing the test accuracy of the chronological
+        backtest (the only honest way to gauge a time-series model)."""
+        ma = (pred.get("model_accuracies") or {})
+        accs = [v for v in ma.values() if v is not None]
+        if accs:
+            avg = sum(accs) / len(accs)
+            return f"{horizon_label} · accuracy {avg*100:.0f}%"
+        return horizon_label
+
     if ml:
         probability_scenarios_combined(
             ml.get("scenario_probabilities", {}) or {},
             ml.get("scenario_targets", {}) or {},
             tech.get("current_price"),
+            title="AI · 1 week",
+            sub=_accuracy_sub(ml, "5d horizon"),
         )
     else:
         st.markdown(
-            panel_open("AI scenario & targets")
+            panel_open("AI · 1 week")
             + "<div class='sent-label'>Fast mode — ML skipped.</div>"
             + panel_close(),
             unsafe_allow_html=True,
+        )
+
+    if ml_1m:
+        probability_scenarios_combined(
+            ml_1m.get("scenario_probabilities", {}) or {},
+            ml_1m.get("scenario_targets", {}) or {},
+            tech.get("current_price"),
+            title="AI · 1 month",
+            sub=_accuracy_sub(ml_1m, "21d horizon"),
         )
 
     # Earnings history (from yfinance via institutional_data)

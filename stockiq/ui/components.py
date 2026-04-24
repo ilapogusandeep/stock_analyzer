@@ -222,9 +222,18 @@ def probability_bars(probs: dict, title: str = "Scenario probability") -> None:
     st.markdown(panel_open(title) + body + panel_close(), unsafe_allow_html=True)
 
 
-def probability_scenarios_combined(probs: dict, targets: dict, current: Optional[float]) -> None:
+def probability_scenarios_combined(
+    probs: dict,
+    targets: dict,
+    current: Optional[float],
+    title: str = "AI scenario & targets",
+    sub: str = "12m horizon",
+) -> None:
     """One panel that shows probability bar + target price + % delta per
-    direction, saving a slot in the right column for other content."""
+    direction, saving a slot in the right column for other content.
+
+    ``title``/``sub`` let callers reuse the panel for different horizons
+    (e.g. "AI · 1 week" / "5d horizon · accuracy 58%")."""
     rows_spec = [
         ("Bullish", "bullish", "pb-bull"),
         ("Neutral", "neutral", "pb-neut"),
@@ -251,7 +260,7 @@ def probability_scenarios_combined(probs: dict, targets: dict, current: Optional
             f'</div>'
         )
     st.markdown(
-        panel_open("AI scenario & targets", "12m horizon") + body + panel_close(),
+        panel_open(title, sub) + body + panel_close(),
         unsafe_allow_html=True,
     )
 
