@@ -386,6 +386,57 @@ with c_mid:
             sub="14d RSI · 12/26/9 MACD",
             cols=2,
         )
+        # --- Analyst consensus + multi-source sentiment (stacked under
+        #     Technical so it fills the space next to Top Holders) ------
+        rec_key = info.get("recommendationKey", "") or ""
+        rec_emoji = {
+            "strong_buy": "🟢", "buy": "🟢",
+            "hold": "🟡",
+            "underperform": "🔴", "sell": "🔴", "strong_sell": "🔴",
+        }.get(rec_key.lower(), "⚪")
+        rec_mean = info.get("recommendationMean")
+        n_analysts = info.get("numberOfAnalystOpinions")
+        tgt_mean = info.get("targetMeanPrice")
+        tgt_low = info.get("targetLowPrice")
+        tgt_high = info.get("targetHighPrice")
+        current_px = tech.get("current_price")
+
+        implied_upside = "—"
+        if tgt_mean and current_px:
+            implied_upside = fmt_pct((tgt_mean / current_px - 1) * 100, decimals=1)
+
+        # Compact target range to fit a half-width column: strip cents.
+        target_range_str = "—"
+        if tgt_low and tgt_high:
+            target_range_str = f"${tgt_low:,.0f} – ${tgt_high:,.0f}"
+
+        sent_label = (sent or {}).get("sentiment_label", "NEUTRAL") if sent else "—"
+        sent_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(sent_label, "⚪")
+
+        rows = []
+        if n_analysts or tgt_mean or rec_mean:
+            rows += [
+                ("Rating",         f"{rec_emoji} {rec_key.replace('_', ' ').upper() or '—'}"),
+                ("Score (1–5)",    fmt_ratio(rec_mean, 2) if rec_mean else "—"),
+                ("Analysts",       str(int(n_analysts)) if n_analysts else "—"),
+                ("Target Mean",    fmt_price(tgt_mean) if tgt_mean else "—"),
+                ("Range",          target_range_str),
+                ("Upside",         implied_upside),
+            ]
+        if sent:
+            rows += [
+                ("Sentiment",   f"{sent_emoji} {sent_label}"),
+                ("Overall",     f"{sent.get('overall_sentiment', 0):+.3f}"),
+                ("News score",  f"{sent.get('news_sentiment', 0):+.3f}"),
+                ("Confidence",  fmt_pct_ratio(sent.get("confidence"), 0)),
+            ]
+        if rows:
+            kv_block(
+                "Analyst & sentiment", rows,
+                sub="12m targets · multi-source",
+                cols=2,
+            )
+
     with mid_r:
         # Top hedge fund / institutional holders — latest 13F filings
         top_holders = (
@@ -393,52 +444,6 @@ with c_mid:
             if isinstance(inst, dict) else []
         )
         institutional_holders_block(top_holders, max_items=8)
-
-    # --- Analyst consensus + multi-source sentiment (merged) ----------------
-    rec_key = info.get("recommendationKey", "") or ""
-    rec_emoji = {
-        "strong_buy": "🟢", "buy": "🟢",
-        "hold": "🟡",
-        "underperform": "🔴", "sell": "🔴", "strong_sell": "🔴",
-    }.get(rec_key.lower(), "⚪")
-    rec_mean = info.get("recommendationMean")
-    n_analysts = info.get("numberOfAnalystOpinions")
-    tgt_mean = info.get("targetMeanPrice")
-    tgt_low = info.get("targetLowPrice")
-    tgt_high = info.get("targetHighPrice")
-    current_px = tech.get("current_price")
-
-    implied_upside = "—"
-    if tgt_mean and current_px:
-        implied_upside = fmt_pct((tgt_mean / current_px - 1) * 100, decimals=1)
-
-    sent_label = (sent or {}).get("sentiment_label", "NEUTRAL") if sent else "—"
-    sent_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(sent_label, "⚪")
-
-    rows = []
-    if n_analysts or tgt_mean or rec_mean:
-        rows += [
-            ("Rating",         f"{rec_emoji} {rec_key.replace('_', ' ').upper() or '—'}"),
-            ("Score (1–5)",    fmt_ratio(rec_mean, 2) if rec_mean else "—"),
-            ("Analysts",       str(int(n_analysts)) if n_analysts else "—"),
-            ("Target Mean",    fmt_price(tgt_mean) if tgt_mean else "—"),
-            ("Target Range",   (f"{fmt_price(tgt_low)} – {fmt_price(tgt_high)}"
-                                if (tgt_low and tgt_high) else "—")),
-            ("Implied Upside", implied_upside),
-        ]
-    if sent:
-        rows += [
-            ("Sentiment",   f"{sent_emoji} {sent_label}"),
-            ("Overall",     f"{sent.get('overall_sentiment', 0):+.3f}"),
-            ("News score",  f"{sent.get('news_sentiment', 0):+.3f}"),
-            ("Confidence",  fmt_pct_ratio(sent.get("confidence"), 0)),
-        ]
-    if rows:
-        kv_block(
-            "Analyst & sentiment", rows,
-            sub="12m targets · multi-source",
-            cols=2,
-        )
 
 
 # ---- Right column: AI predictions + backtest --------------------------------
