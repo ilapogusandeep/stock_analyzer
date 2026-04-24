@@ -52,21 +52,41 @@ DENSE_DARK_CSS = """
   }
   .topbar-logo span { color: #a5b4fc; font-weight: 600; font-size: 0.75rem; margin-left: 4px; letter-spacing: 0.06em; text-transform: uppercase; }
 
-  /* Compact Streamlit input controls inside the top bar */
+  /* Compact Streamlit input controls inside the top bar.
+     Force every label + widget-text to a light slate so the dark
+     background never eats it. */
+  .topbar label,
+  .topbar [data-testid="stWidgetLabel"],
   .topbar [data-testid="stTextInput"] label,
-  .topbar [data-testid="stCheckbox"] label { font-size: 0.68rem !important; color: #94a3b8 !important;
-      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px !important; }
+  .topbar [data-testid="stSelectbox"] label,
+  .topbar [data-testid="stCheckbox"] label {
+      font-size: 0.72rem !important;
+      color: #cbd5e1 !important;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 2px !important;
+  }
+  .topbar [data-testid="stTextInput"] input,
+  .topbar [data-testid="stSelectbox"] [data-baseweb="select"] *,
+  .topbar [data-testid="stSelectbox"] [role="combobox"],
+  .topbar [data-testid="stSelectbox"] input {
+      color: #ffffff !important;
+  }
   .topbar [data-testid="stTextInput"] input {
-      background: rgba(255,255,255,0.04); color: #fff;
+      background: rgba(255,255,255,0.04);
       border: 1px solid rgba(148,163,255,0.2); padding: 6px 10px;
       font-size: 0.85rem; height: 34px;
   }
   .topbar [data-testid="stTextInput"] input:focus { border-color: #6366f1; box-shadow: none; }
+  .topbar [data-testid="stSelectbox"] [data-baseweb="select"] > div {
+      background: rgba(255,255,255,0.04) !important;
+      border: 1px solid rgba(148,163,255,0.2) !important;
+  }
   .topbar [data-testid="stButton"] button {
       height: 34px; margin-top: 18px;
       font-weight: 700; letter-spacing: 0.04em;
   }
   .topbar [data-testid="stCheckbox"] { margin-top: 20px; }
+  .topbar [data-testid="stCheckbox"] label > div:last-child { color: #cbd5e1 !important; }
 
   /* ===== Header band ===== */
   .hb {
