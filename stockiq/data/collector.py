@@ -89,108 +89,97 @@ class EnhancedDataCollector:
             all_headlines = []
             all_sentiments = []
             all_sources = []
-            
+            all_timestamps = []  # Unix seconds or None
+
+            def _extend_from(src_data, label):
+                if not src_data:
+                    return
+                n = len(src_data.get('headlines', []))
+                all_headlines.extend(src_data.get('headlines', []))
+                all_sentiments.extend(src_data.get('sentiments', []))
+                all_sources.extend(src_data.get('sources', []))
+                # Some fetchers don't include timestamps yet — pad with None
+                # so index alignment holds across parallel lists.
+                ts = src_data.get('timestamps') or [None] * n
+                if len(ts) < n:
+                    ts = list(ts) + [None] * (n - len(ts))
+                all_timestamps.extend(ts[:n])
+                news_data['source_breakdown'][label] = src_data.get('count', n)
+
             # 1. NewsAPI (Free tier: 1000 requests/month)
             try:
-                newsapi_data = self._get_newsapi_data()
-                if newsapi_data:
-                    all_headlines.extend(newsapi_data['headlines'])
-                    all_sentiments.extend(newsapi_data['sentiments'])
-                    all_sources.extend(newsapi_data['sources'])
-                    news_data['source_breakdown']['NewsAPI'] = newsapi_data['count']
+                _extend_from(self._get_newsapi_data(), 'NewsAPI')
             except Exception as e:
                 print(f"⚠️ NewsAPI error: {e}")
-            
-            # 2. Alpha Vantage News (Free tier: 5 calls/minute, 500 calls/day)
+
+            # 2. Alpha Vantage News
             try:
-                alphavantage_data = self._get_alphavantage_news()
-                if alphavantage_data:
-                    all_headlines.extend(alphavantage_data['headlines'])
-                    all_sentiments.extend(alphavantage_data['sentiments'])
-                    all_sources.extend(alphavantage_data['sources'])
-                    news_data['source_breakdown']['AlphaVantage'] = alphavantage_data['count']
+                _extend_from(self._get_alphavantage_news(), 'AlphaVantage')
             except Exception as e:
                 print(f"⚠️ Alpha Vantage error: {e}")
-            
-            # 3. Yahoo Finance RSS (Free)
+
+            # 3. Yahoo Finance RSS
             try:
-                yahoo_data = self._get_yahoo_rss_news()
-                if yahoo_data:
-                    all_headlines.extend(yahoo_data['headlines'])
-                    all_sentiments.extend(yahoo_data['sentiments'])
-                    all_sources.extend(yahoo_data['sources'])
-                    news_data['source_breakdown']['YahooRSS'] = yahoo_data['count']
+                _extend_from(self._get_yahoo_rss_news(), 'YahooRSS')
             except Exception as e:
                 print(f"⚠️ Yahoo RSS error: {e}")
-            
-            # 4. MarketWatch RSS (Free)
+
+            # 4. MarketWatch RSS
             try:
-                marketwatch_data = self._get_marketwatch_rss()
-                if marketwatch_data:
-                    all_headlines.extend(marketwatch_data['headlines'])
-                    all_sentiments.extend(marketwatch_data['sentiments'])
-                    all_sources.extend(marketwatch_data['sources'])
-                    news_data['source_breakdown']['MarketWatch'] = marketwatch_data['count']
+                _extend_from(self._get_marketwatch_rss(), 'MarketWatch')
             except Exception as e:
                 print(f"⚠️ MarketWatch RSS error: {e}")
-            
-            # 5. Reddit API (Free)
+
+            # 5. Reddit API
             try:
-                reddit_data = self._get_reddit_sentiment()
-                if reddit_data:
-                    all_headlines.extend(reddit_data['headlines'])
-                    all_sentiments.extend(reddit_data['sentiments'])
-                    all_sources.extend(reddit_data['sources'])
-                    news_data['source_breakdown']['Reddit'] = reddit_data['count']
+                _extend_from(self._get_reddit_sentiment(), 'Reddit')
             except Exception as e:
                 print(f"⚠️ Reddit API error: {e}")
-            
-            # 6. StockTwits API (Free)
+
+            # 6. StockTwits API
             try:
-                stocktwits_data = self._get_stocktwits_data()
-                if stocktwits_data:
-                    all_headlines.extend(stocktwits_data['headlines'])
-                    all_sentiments.extend(stocktwits_data['sentiments'])
-                    all_sources.extend(stocktwits_data['sources'])
-                    news_data['source_breakdown']['StockTwits'] = stocktwits_data['count']
+                _extend_from(self._get_stocktwits_data(), 'StockTwits')
             except Exception as e:
                 print(f"⚠️ StockTwits error: {e}")
-            
-            # 7. Google News RSS (Free)
+
+            # 7. Google News RSS
             try:
-                google_data = self._get_google_news_rss()
-                if google_data:
-                    all_headlines.extend(google_data['headlines'])
-                    all_sentiments.extend(google_data['sentiments'])
-                    all_sources.extend(google_data['sources'])
-                    news_data['source_breakdown']['GoogleNews'] = google_data['count']
+                _extend_from(self._get_google_news_rss(), 'GoogleNews')
             except Exception as e:
                 print(f"⚠️ Google News RSS error: {e}")
 
-            # 8. yfinance native news — already aggregates Motley Fool,
-            #    Investor's Business Daily, Seeking Alpha, Benzinga,
-            #    MarketWatch, Zacks, Reuters, Business Insider with real
-            #    publisher names.
+            # 8. yfinance native news — aggregates Motley Fool, IBD,
+            #    Seeking Alpha, Benzinga, MarketWatch, Zacks, Reuters,
+            #    Business Insider with real publisher names.
             try:
-                yf_data = self._get_yfinance_news()
-                if yf_data:
-                    all_headlines.extend(yf_data['headlines'])
-                    all_sentiments.extend(yf_data['sentiments'])
-                    all_sources.extend(yf_data['sources'])
-                    news_data['source_breakdown']['YFinanceNative'] = yf_data['count']
+                _extend_from(self._get_yfinance_news(), 'YFinanceNative')
             except Exception as e:
                 print(f"⚠️ yfinance news error: {e}")
 
-            # De-duplicate headlines that appear from multiple aggregators
-            seen_headlines = set()
-            dedup_h, dedup_s, dedup_src = [], [], []
-            for h, s, src in zip(all_headlines, all_sentiments, all_sources):
+            # De-duplicate headlines that appear from multiple aggregators.
+            # When dups exist, keep the one with the most recent timestamp
+            # (so later recency decay uses the freshest signal).
+            seen_keys: dict = {}
+            dedup_h, dedup_s, dedup_src, dedup_ts = [], [], [], []
+            for h, s, src, ts in zip(
+                all_headlines, all_sentiments, all_sources, all_timestamps
+            ):
                 key = h.lower().strip()[:80]
-                if key in seen_headlines or not key:
+                if not key:
                     continue
-                seen_headlines.add(key)
-                dedup_h.append(h); dedup_s.append(s); dedup_src.append(src)
-            all_headlines, all_sentiments, all_sources = dedup_h, dedup_s, dedup_src
+                if key in seen_keys:
+                    idx = seen_keys[key]
+                    existing_ts = dedup_ts[idx]
+                    # Swap in the fresher copy if timestamp is newer
+                    if ts and (existing_ts is None or ts > existing_ts):
+                        dedup_h[idx] = h; dedup_s[idx] = s
+                        dedup_src[idx] = src; dedup_ts[idx] = ts
+                    continue
+                seen_keys[key] = len(dedup_h)
+                dedup_h.append(h); dedup_s.append(s)
+                dedup_src.append(src); dedup_ts.append(ts)
+            all_headlines, all_sentiments = dedup_h, dedup_s
+            all_sources, all_timestamps = dedup_src, dedup_ts
 
             # Calculate overall metrics
             if all_sentiments:
@@ -202,6 +191,7 @@ class EnhancedDataCollector:
                 news_data['headlines'] = all_headlines[:30]
                 news_data['sources'] = all_sources[:30]
                 news_data['sentiment_scores'] = all_sentiments[:30]
+                news_data['timestamps'] = all_timestamps[:30]
                 news_data['confidence'] = min(0.95, len(all_headlines) * 0.05)
             else:
                 # Fallback to original method if all APIs fail
@@ -850,7 +840,9 @@ class EnhancedDataCollector:
                 headlines = []
                 sentiments = []
                 sources = []
+                timestamps = []
 
+                from email.utils import parsedate_to_datetime
                 for item in items[:25]:
                     title = item.find('title')
                     if not title:
@@ -864,14 +856,24 @@ class EnhancedDataCollector:
                     if title_text.endswith(f" - {publisher}"):
                         title_text = title_text[: -(len(publisher) + 3)].strip()
 
+                    ts_val = None
+                    pd_tag = item.find('pubDate')
+                    if pd_tag:
+                        try:
+                            ts_val = parsedate_to_datetime(pd_tag.get_text()).timestamp()
+                        except Exception:
+                            ts_val = None
+
                     headlines.append(title_text)
                     sentiments.append(self._analyze_text_sentiment(title_text))
                     sources.append(publisher)
+                    timestamps.append(ts_val)
 
                 return {
                     'headlines': headlines,
                     'sentiments': sentiments,
                     'sources': sources,
+                    'timestamps': timestamps,
                     'count': len(headlines)
                 }
         except Exception as e:
@@ -891,19 +893,34 @@ class EnhancedDataCollector:
             if not raw:
                 return None
 
-            headlines, sentiments, sources = [], [], []
+            headlines, sentiments, sources, timestamps = [], [], [], []
+            from datetime import datetime as _dt
             for item in raw[:25]:
-                # Old schema: {'title': ..., 'publisher': ...}
-                # New schema: {'content': {'title': ..., 'provider': {'displayName': ...}}}
+                # Old schema: {'title', 'publisher', 'providerPublishTime'}
+                # New schema: {'content': {'title', 'provider': {'displayName'},
+                #              'pubDate' (ISO)}}
                 content = item.get('content')
+                ts_val = None
                 if isinstance(content, dict):
                     title = content.get('title') or ''
                     prov = content.get('provider') or {}
                     publisher = (prov.get('displayName')
                                  if isinstance(prov, dict) else None) or 'Yahoo Finance'
+                    pd_str = content.get('pubDate')
+                    if pd_str:
+                        try:
+                            ts_val = _dt.fromisoformat(
+                                str(pd_str).replace('Z', '+00:00')).timestamp()
+                        except Exception:
+                            ts_val = None
                 else:
                     title = item.get('title') or ''
                     publisher = item.get('publisher') or 'Yahoo Finance'
+                    ts_val = item.get('providerPublishTime')  # already Unix seconds
+                    try:
+                        ts_val = float(ts_val) if ts_val else None
+                    except (TypeError, ValueError):
+                        ts_val = None
 
                 title = str(title).strip()
                 if not title:
@@ -911,11 +928,13 @@ class EnhancedDataCollector:
                 headlines.append(title)
                 sentiments.append(self._analyze_text_sentiment(title))
                 sources.append(str(publisher))
+                timestamps.append(ts_val)
 
             return {
                 'headlines': headlines,
                 'sentiments': sentiments,
                 'sources': sources,
+                'timestamps': timestamps,
                 'count': len(headlines),
             }
         except Exception as e:

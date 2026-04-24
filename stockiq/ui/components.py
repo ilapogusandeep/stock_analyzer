@@ -286,8 +286,22 @@ def news_feed_block(articles: list, max_items: int = 20) -> None:
     # Count unique source names so users see the breadth at a glance.
     sources_seen = len({(a.get("source") or "").strip() for a in articles[:max_items]
                         if (a.get("source") or "").strip()})
-    sub = (f"{shown} headlines · {sources_seen} sources" if sources_seen
-           else f"{shown} headlines")
+    # Freshness: how old is the newest article?
+    import time as _time
+    now = _time.time()
+    recent_ts = [a.get("published_at") for a in articles[:max_items]
+                 if a.get("published_at")]
+    freshness = ""
+    if recent_ts:
+        age_s = now - max(recent_ts)
+        if age_s < 3600:
+            freshness = f" · freshest {int(age_s/60)}m"
+        elif age_s < 86400:
+            freshness = f" · freshest {int(age_s/3600)}h"
+        else:
+            freshness = f" · freshest {int(age_s/86400)}d"
+    sub = (f"{shown} headlines · {sources_seen} sources{freshness}" if sources_seen
+           else f"{shown} headlines{freshness}")
     st.markdown(
         panel_open("News feed", sub)
         + f'<div class="nf-scroll">{rows}</div>'

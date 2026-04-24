@@ -541,12 +541,16 @@ class UniversalStockAnalyzer:
             headlines = ns.get('headlines') or []
             scores = ns.get('sentiment_scores') or []
             sources = ns.get('sources') or []
+            timestamps = ns.get('timestamps') or []
             articles = []
             for i, h in enumerate(headlines[:30]):
                 articles.append({
                     'headline': str(h),
                     'score': float(scores[i]) if i < len(scores) else 0.0,
                     'source': str(sources[i]) if i < len(sources) else '',
+                    'published_at': (float(timestamps[i])
+                                     if i < len(timestamps) and timestamps[i]
+                                     else None),
                 })
 
             return {
@@ -1220,6 +1224,37 @@ class UniversalStockAnalyzer:
                 features['news_count'] = news_sentiment.get('news_count', 0)
                 features['news_positive_ratio'] = news_sentiment.get('positive_ratio', 0.5)
                 features['news_confidence'] = news_sentiment.get('confidence', 0)
+
+                # Source diversity — more unique publishers = stronger signal.
+                _src_list = [s for s in (news_sentiment.get('sources') or []) if s]
+                features['news_source_count'] = len(set(_src_list))
+
+                # Recency-weighted sentiment — recent headlines count more
+                # (exponential decay, half-life ~ 2 days). If timestamps
+                # are missing, falls back to the unweighted overall score.
+                _scores = news_sentiment.get('sentiment_scores') or []
+                _ts = news_sentiment.get('timestamps') or []
+                try:
+                    import time as _time
+                    import math as _math
+                    now = _time.time()
+                    half_life_s = 2 * 86400.0
+                    weighted_num = 0.0
+                    weighted_den = 0.0
+                    for i, sc in enumerate(_scores):
+                        if i >= len(_ts) or _ts[i] is None:
+                            w = 0.5  # modest weight for undated articles
+                        else:
+                            age = max(0.0, now - float(_ts[i]))
+                            w = _math.exp(-_math.log(2) * age / half_life_s)
+                        weighted_num += float(sc) * w
+                        weighted_den += w
+                    features['news_recency_sentiment'] = (
+                        weighted_num / weighted_den
+                        if weighted_den > 0 else features['news_sentiment']
+                    )
+                except Exception:
+                    features['news_recency_sentiment'] = features['news_sentiment']
 
                 # Social sentiment features
                 social_sentiment = enhanced_data.get('social_sentiment') or {}
