@@ -1396,9 +1396,29 @@ class UniversalStockAnalyzer:
             predictions = np.array(all_predictions)
             actuals = np.array(all_actuals)
             confidences = np.array(all_confidences)
-            
+
             # Basic accuracy
             accuracy = (predictions == actuals).mean()
+
+            # --- Benchmark: buy-and-hold SPY over the same 1-year window ---
+            # Gives an honest comparison (did we actually beat the market?).
+            benchmark_total_return = None
+            try:
+                import yfinance as _yf
+                _spy = _yf.Ticker("SPY").history(
+                    start=hist.index[0], end=hist.index[-1] + pd.Timedelta(days=1),
+                )
+                if not _spy.empty:
+                    benchmark_total_return = float(
+                        _spy["Close"].iloc[-1] / _spy["Close"].iloc[0] - 1
+                    )
+            except Exception:
+                pass
+
+            # --- Buy-and-hold for this ticker ---
+            buy_hold_return = float(
+                hist["Close"].iloc[-1] / hist["Close"].iloc[0] - 1
+            )
             
             # Trade-based metrics
             if trade_results:
@@ -1440,6 +1460,12 @@ class UniversalStockAnalyzer:
                 bearish_signals = (predictions == 0).sum()
                 neutral_signals = len(predictions) - bullish_signals - bearish_signals
                 
+                alpha_vs_spy = (
+                    strategy_total_return - benchmark_total_return
+                    if benchmark_total_return is not None else None
+                )
+                alpha_vs_bh = strategy_total_return - buy_hold_return
+
                 return {
                     'total_trades': len(trade_results),
                     'win_rate': win_rate,
@@ -1451,6 +1477,10 @@ class UniversalStockAnalyzer:
                     'high_conf_trades': high_conf_count,
                     'high_conf_win_rate': high_conf_win_rate,
                     'high_conf_avg_return': high_conf_avg_return,
+                    'benchmark_spy_return': benchmark_total_return,
+                    'buy_hold_return': buy_hold_return,
+                    'alpha_vs_spy': alpha_vs_spy,
+                    'alpha_vs_buy_hold': alpha_vs_bh,
                     'total_signals': {
                         'bullish': bullish_signals,
                         'bearish': bearish_signals,
@@ -1459,7 +1489,7 @@ class UniversalStockAnalyzer:
                     'enhanced_features': len(features.columns),
                     'data_sources': list(enhanced_data.keys()) if enhanced_data else ['basic'],
                     'backtest_period': f"{len(hist)} days",
-                    'validation_method': 'Time Series Cross-Validation'
+                    'validation_method': 'Walk-forward (5-fold TimeSeriesSplit)'
                 }
             else:
                 return {
@@ -1473,11 +1503,15 @@ class UniversalStockAnalyzer:
                     'high_conf_trades': 0,
                     'high_conf_win_rate': 0,
                     'high_conf_avg_return': 0,
+                    'benchmark_spy_return': benchmark_total_return,
+                    'buy_hold_return': buy_hold_return,
+                    'alpha_vs_spy': None,
+                    'alpha_vs_buy_hold': -buy_hold_return,
                     'total_signals': {'bullish': 0, 'bearish': 0, 'neutral': 0},
                     'enhanced_features': len(features.columns),
                     'data_sources': list(enhanced_data.keys()) if enhanced_data else ['basic'],
                     'backtest_period': f"{len(hist)} days",
-                    'validation_method': 'Time Series Cross-Validation'
+                    'validation_method': 'Walk-forward (5-fold TimeSeriesSplit)'
                 }
                 
         except Exception as e:

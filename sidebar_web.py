@@ -445,6 +445,8 @@ with c_right:
                 pass
 
     if bt:
+        alpha_spy = bt.get("alpha_vs_spy")
+        alpha_bh = bt.get("alpha_vs_buy_hold")
         kv_block(
             "Backtest",
             [
@@ -454,8 +456,10 @@ with c_right:
                 ("Max DD",       fmt_pct_ratio(bt.get("max_drawdown"), 1)),
                 ("Accuracy",     fmt_pct_ratio(bt.get("prediction_accuracy"), 1)),
                 ("Trades",       str(bt.get("total_trades", 0))),
-                ("HighConf Trd", str(bt.get("high_conf_trades", 0))),
-                ("HC Win Rate",  fmt_pct_ratio(bt.get("high_conf_win_rate"), 1)),
+                ("SPY B&H",      fmt_pct_ratio(bt.get("benchmark_spy_return"), 1) if bt.get("benchmark_spy_return") is not None else "—"),
+                ("vs SPY",       fmt_pct_ratio(alpha_spy, 1) if alpha_spy is not None else "—"),
+                (f"{ticker} B&H", fmt_pct_ratio(bt.get("buy_hold_return"), 1)),
+                ("vs B&H",       fmt_pct_ratio(alpha_bh, 1) if alpha_bh is not None else "—"),
             ],
             sub=f"{bt.get('backtest_period', '—')} · {bt.get('enhanced_features', 0)} feat",
         )
