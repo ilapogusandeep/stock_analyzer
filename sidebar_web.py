@@ -264,6 +264,7 @@ with c_left:
             ("Institutional",  fmt_pct_ratio(inst_pct, 1) if inst_pct else "—"),
         ],
         sub="short · ownership",
+        cols=2,
     )
 
     # Options flow — put/call ratios + ATM IV from nearest expiry
@@ -361,19 +362,23 @@ with c_mid:
             else "🔴 Bearish" if (macd_v is not None and macd_v < 0)
             else "—"
         )
+        rsi_str = f"{rsi_v:.1f} {rsi_state.split(' ', 1)[1]}" if rsi_v else "—"
+        macd_str = (
+            f"{macd_v:+.2f} {macd_state.split(' ', 1)[1]}"
+            if macd_v is not None else "—"
+        )
         kv_block(
             "Technical",
             [
-                ("RSI (14)",       f"{rsi_v:.1f}"),
-                ("State",          rsi_state),
-                ("MACD",           f"{macd_v:+.2f}" if macd_v is not None else "—"),
-                ("Signal",         macd_state),
+                ("RSI (14)",       rsi_str),
+                ("MACD",           macd_str),
                 ("SMA 20",         f"${tech.get('sma_20', 0):,.2f}" if tech.get('sma_20') else "—"),
                 ("SMA 50",         f"${tech.get('sma_50', 0):,.2f}" if tech.get('sma_50') else "—"),
                 ("SMA 200",        f"${tech.get('sma_200', 0):,.2f}" if tech.get('sma_200') else "—"),
                 ("Volatility 20d", f"{tech.get('volatility_20d', 0):.1f}%" if tech.get('volatility_20d') else "—"),
             ],
             sub="14d RSI · 12/26/9 MACD",
+            cols=2,
         )
     with mid_r:
         performance_bars(tech)
@@ -415,12 +420,14 @@ with c_mid:
             ("Sentiment",   f"{sent_emoji} {sent_label}"),
             ("Overall",     f"{sent.get('overall_sentiment', 0):+.3f}"),
             ("News score",  f"{sent.get('news_sentiment', 0):+.3f}"),
-            ("Social",      f"{sent.get('social_sentiment', 0):+.3f}"),
-            ("News count",  str(sent.get("news_count", 0))),
             ("Confidence",  fmt_pct_ratio(sent.get("confidence"), 0)),
         ]
     if rows:
-        kv_block("Analyst & sentiment", rows, sub="12m targets · multi-source")
+        kv_block(
+            "Analyst & sentiment", rows,
+            sub="12m targets · multi-source",
+            cols=2,
+        )
 
 
 # ---- Right column: AI predictions + backtest --------------------------------

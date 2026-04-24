@@ -169,12 +169,23 @@ def panel_close() -> str:
     return "</div>"
 
 
-def kv_block(title: str, rows: Iterable[Tuple[str, str]], sub: str = "") -> None:
-    """Render a titled panel with a two-column key:value list."""
+def kv_block(
+    title: str,
+    rows: Iterable[Tuple[str, str]],
+    sub: str = "",
+    cols: int = 1,
+) -> None:
+    """Render a titled panel with a key:value list.
+
+    ``cols=1`` is the default single-column layout (label | value).
+    ``cols=2`` packs rows into a four-column grid (label | value | label
+    | value) so tall panels use roughly half the vertical space.
+    """
     body = "".join(
         f'<div class="k">{k}</div><div class="v">{v}</div>' for k, v in rows
     )
-    html = panel_open(title, sub) + f'<div class="kv">{body}</div>' + panel_close()
+    grid_cls = "kv kv-2" if cols == 2 else "kv"
+    html = panel_open(title, sub) + f'<div class="{grid_cls}">{body}</div>' + panel_close()
     st.markdown(html, unsafe_allow_html=True)
 
 

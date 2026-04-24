@@ -174,8 +174,14 @@ DENSE_DARK_CSS = """
       gap: 8px 16px;
       font-size: 0.95rem;
   }
+  .kv.kv-2 {
+      grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
+      gap: 6px 12px;
+      font-size: 0.88rem;
+  }
   .kv .k { color: #94a3b8; }
   .kv .v { color: #f1f5f9; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .kv.kv-2 .v { text-align: left; }
   .kv .v.good { color: #4ade80; }
   .kv .v.bad  { color: #f87171; }
 
