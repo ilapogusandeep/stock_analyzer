@@ -469,7 +469,7 @@ with c_right:
     unusual_options_block(unusual_opts)
 
     # News feed — per-article headlines + sentiment that fed the model.
-    news_feed_block(sent.get("articles") or [], max_items=6)
+    news_feed_block(sent.get("articles") or [], max_items=20)
 
 
 st.markdown(

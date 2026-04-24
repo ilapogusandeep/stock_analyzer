@@ -542,7 +542,7 @@ class UniversalStockAnalyzer:
             scores = ns.get('sentiment_scores') or []
             sources = ns.get('sources') or []
             articles = []
-            for i, h in enumerate(headlines[:20]):
+            for i, h in enumerate(headlines[:30]):
                 articles.append({
                     'headline': str(h),
                     'score': float(scores[i]) if i < len(scores) else 0.0,

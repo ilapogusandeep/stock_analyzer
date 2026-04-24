@@ -215,6 +215,16 @@ DENSE_DARK_CSS = """
   .pbx-delta { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
   /* News feed panel */
+  .nf-scroll {
+      max-height: 340px;
+      overflow-y: auto;
+      padding-right: 4px;
+  }
+  .nf-scroll::-webkit-scrollbar { width: 6px; }
+  .nf-scroll::-webkit-scrollbar-thumb {
+      background: rgba(148,163,255,0.15);
+      border-radius: 3px;
+  }
   .nf-row {
       display: grid;
       grid-template-columns: 18px 1fr 48px;

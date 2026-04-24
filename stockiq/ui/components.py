@@ -256,9 +256,10 @@ def probability_scenarios_combined(probs: dict, targets: dict, current: Optional
     )
 
 
-def news_feed_block(articles: list, max_items: int = 6) -> None:
+def news_feed_block(articles: list, max_items: int = 20) -> None:
     """Show the actual headlines + per-article sentiment score that fed the
-    model. Transparency so users can see the 'evidence'."""
+    model. Transparency so users can see the 'evidence'. Rendered inside a
+    scrollable container so many headlines fit without blowing up height."""
     if not articles:
         return
 
@@ -281,9 +282,16 @@ def news_feed_block(articles: list, max_items: int = 6) -> None:
             f'<span class="nf-score {cls}">{score:+.2f}</span>'
             f'</div>'
         )
+    shown = min(len(articles), max_items)
+    # Count unique source names so users see the breadth at a glance.
+    sources_seen = len({(a.get("source") or "").strip() for a in articles[:max_items]
+                        if (a.get("source") or "").strip()})
+    sub = (f"{shown} headlines · {sources_seen} sources" if sources_seen
+           else f"{shown} headlines")
     st.markdown(
-        panel_open("News feed", f"top {min(len(articles), max_items)} headlines")
-        + rows + panel_close(),
+        panel_open("News feed", sub)
+        + f'<div class="nf-scroll">{rows}</div>'
+        + panel_close(),
         unsafe_allow_html=True,
     )
 

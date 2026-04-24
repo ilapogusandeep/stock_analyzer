@@ -166,16 +166,43 @@ class EnhancedDataCollector:
                     news_data['source_breakdown']['GoogleNews'] = google_data['count']
             except Exception as e:
                 print(f"⚠️ Google News RSS error: {e}")
-            
+
+            # 8. yfinance native news — already aggregates Motley Fool,
+            #    Investor's Business Daily, Seeking Alpha, Benzinga,
+            #    MarketWatch, Zacks, Reuters, Business Insider with real
+            #    publisher names.
+            try:
+                yf_data = self._get_yfinance_news()
+                if yf_data:
+                    all_headlines.extend(yf_data['headlines'])
+                    all_sentiments.extend(yf_data['sentiments'])
+                    all_sources.extend(yf_data['sources'])
+                    news_data['source_breakdown']['YFinanceNative'] = yf_data['count']
+            except Exception as e:
+                print(f"⚠️ yfinance news error: {e}")
+
+            # De-duplicate headlines that appear from multiple aggregators
+            seen_headlines = set()
+            dedup_h, dedup_s, dedup_src = [], [], []
+            for h, s, src in zip(all_headlines, all_sentiments, all_sources):
+                key = h.lower().strip()[:80]
+                if key in seen_headlines or not key:
+                    continue
+                seen_headlines.add(key)
+                dedup_h.append(h); dedup_s.append(s); dedup_src.append(src)
+            all_headlines, all_sentiments, all_sources = dedup_h, dedup_s, dedup_src
+
             # Calculate overall metrics
             if all_sentiments:
                 news_data['overall_sentiment'] = sum(all_sentiments) / len(all_sentiments)
                 news_data['news_count'] = len(all_headlines)
                 news_data['positive_ratio'] = len([s for s in all_sentiments if s > 0.1]) / len(all_sentiments)
-                news_data['headlines'] = all_headlines[:8]  # Show top 8
-                news_data['sources'] = list(set(all_sources))  # Unique sources
-                news_data['sentiment_scores'] = all_sentiments[:8]
-                news_data['confidence'] = min(0.95, len(all_headlines) * 0.05)  # Higher confidence with more sources
+                # Keep a wider slice so the UI can show 15-20 headlines
+                # in a scrollable box.
+                news_data['headlines'] = all_headlines[:30]
+                news_data['sources'] = all_sources[:30]
+                news_data['sentiment_scores'] = all_sentiments[:30]
+                news_data['confidence'] = min(0.95, len(all_headlines) * 0.05)
             else:
                 # Fallback to original method if all APIs fail
                 news_data = self._get_news_sentiment()
@@ -804,29 +831,43 @@ class EnhancedDataCollector:
             return None
     
     def _get_google_news_rss(self):
-        """Get news from Google News RSS"""
+        """Get news from Google News RSS.
+
+        Each <item> has a <source> child naming the actual publisher
+        (e.g. "CNBC", "Seeking Alpha", "MarketBeat", "The Motley Fool",
+        "Benzinga"). Extract that instead of labeling everything
+        "Google News" so users see which outlet reported what.
+        """
         try:
             url = f"https://news.google.com/rss/search?q={self.ticker}+stock&hl=en-US&gl=US&ceid=US:en"
-            
+
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(response.content, 'xml')
                 items = soup.find_all('item')
-                
+
                 headlines = []
                 sentiments = []
                 sources = []
-                
-                for item in items[:10]:
+
+                for item in items[:25]:
                     title = item.find('title')
-                    if title:
-                        title_text = title.get_text()
-                        headlines.append(title_text)
-                        sentiment = self._analyze_text_sentiment(title_text)
-                        sentiments.append(sentiment)
-                        sources.append('Google News')
-                
+                    if not title:
+                        continue
+                    title_text = title.get_text()
+                    # Google News puts headlines as "<title> - <publisher>".
+                    # Strip the trailing publisher; the real source comes
+                    # from the <source> tag below.
+                    pub_tag = item.find('source')
+                    publisher = pub_tag.get_text().strip() if pub_tag else 'Google News'
+                    if title_text.endswith(f" - {publisher}"):
+                        title_text = title_text[: -(len(publisher) + 3)].strip()
+
+                    headlines.append(title_text)
+                    sentiments.append(self._analyze_text_sentiment(title_text))
+                    sources.append(publisher)
+
                 return {
                     'headlines': headlines,
                     'sentiments': sentiments,
@@ -836,7 +877,51 @@ class EnhancedDataCollector:
         except Exception as e:
             print(f"⚠️ Google News RSS error: {e}")
             return None
-    
+
+    def _get_yfinance_news(self):
+        """Pull yfinance's native ticker.news feed.
+
+        yfinance aggregates from Motley Fool, Investor's Business Daily,
+        Seeking Alpha, Benzinga, MarketWatch, Zacks, Reuters, Business
+        Insider, etc., and returns the real publisher name per article.
+        Response schema changed across versions, so read both shapes.
+        """
+        try:
+            raw = getattr(self.stock, 'news', None) or []
+            if not raw:
+                return None
+
+            headlines, sentiments, sources = [], [], []
+            for item in raw[:25]:
+                # Old schema: {'title': ..., 'publisher': ...}
+                # New schema: {'content': {'title': ..., 'provider': {'displayName': ...}}}
+                content = item.get('content')
+                if isinstance(content, dict):
+                    title = content.get('title') or ''
+                    prov = content.get('provider') or {}
+                    publisher = (prov.get('displayName')
+                                 if isinstance(prov, dict) else None) or 'Yahoo Finance'
+                else:
+                    title = item.get('title') or ''
+                    publisher = item.get('publisher') or 'Yahoo Finance'
+
+                title = str(title).strip()
+                if not title:
+                    continue
+                headlines.append(title)
+                sentiments.append(self._analyze_text_sentiment(title))
+                sources.append(str(publisher))
+
+            return {
+                'headlines': headlines,
+                'sentiments': sentiments,
+                'sources': sources,
+                'count': len(headlines),
+            }
+        except Exception as e:
+            print(f"⚠️ yfinance native news error: {e}")
+            return None
+
     # STOCK RANKINGS DATA SOURCES
     
     def _get_stock_rankings_data(self):
