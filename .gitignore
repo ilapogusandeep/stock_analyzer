@@ -56,7 +56,9 @@ Thumbs.db
 *.json
 *.pkl
 *.pickle
+*.parquet
 portfolio.json
+/data/
 
 # Logs
 *.log

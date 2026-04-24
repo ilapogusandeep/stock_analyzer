@@ -13,6 +13,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from stockiq.core.analyzer import UniversalStockAnalyzer
+from stockiq.core.prediction_log import PredictionLog
 from stockiq.data.tickers import POPULAR_TICKERS
 from stockiq.ui.components import (
     earnings_history_block,
@@ -28,6 +29,7 @@ from stockiq.ui.components import (
     panel_open,
     performance_bars,
     probability_scenarios_combined,
+    track_record_block,
 )
 from stockiq.ui.theme import inject_theme
 
@@ -131,6 +133,20 @@ if not data:
 
 # Remember what we analyzed so the next selection change can auto-fire.
 st.session_state.last_analyzed_ticker = ticker
+
+# --- Prediction log: record this call + lazily resolve any old pending rows.
+#    Stored as parquet under data/predictions.parquet at repo root.
+_pred_log = PredictionLog(horizon_days=5)
+try:
+    _pred_log.log(
+        ticker=ticker,
+        ml=(data.get("ml_prediction") or {}),
+        price=(data.get("tech_data") or {}).get("current_price"),
+    )
+    _pred_log.resolve_pending()
+except Exception:
+    # Logging failure should never block the UI.
+    pass
 
 hist = data["hist"]
 info = data.get("info", {}) or {}
@@ -439,6 +455,12 @@ with c_right:
             + panel_close(),
             unsafe_allow_html=True,
         )
+
+    # Track record — renders the prediction log + calibration summary.
+    try:
+        track_record_block(_pred_log.summary())
+    except Exception as e:
+        st.caption(f"(track record unavailable: {e})")
 
 
 st.markdown(

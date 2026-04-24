@@ -208,6 +208,58 @@ DENSE_DARK_CSS = """
   .pbx-tgt   { color: #f1f5f9; text-align: right; font-variant-numeric: tabular-nums; }
   .pbx-delta { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
+  /* Track record panel */
+  .tr-headline {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 8px; margin: 2px 0 10px;
+  }
+  .tr-big {
+      font-size: 1.35rem; font-weight: 700; color: #fff;
+      font-variant-numeric: tabular-nums;
+  }
+  .tr-sub {
+      font-size: 0.65rem; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .tr-section {
+      font-size: 0.68rem; color: #a5b4fc;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin: 10px 0 4px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(148,163,255,0.12);
+  }
+  .tr-row {
+      display: grid;
+      grid-template-columns: 70px 54px 78px 44px 58px;
+      gap: 6px; align-items: center;
+      font-size: 0.78rem; padding: 3px 0;
+      border-bottom: 1px dashed rgba(148,163,255,0.07);
+      font-variant-numeric: tabular-nums;
+  }
+  .tr-row:last-child { border-bottom: none; }
+  .tr-tkr { color: #fff; font-weight: 700; }
+  .tr-pill {
+      display: inline-block; font-size: 0.65rem; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px; letter-spacing: 0.05em;
+      text-align: center;
+  }
+  .tr-pill-hit     { background: rgba(34,197,94,0.18); color: #4ade80; border: 1px solid rgba(34,197,94,0.4); }
+  .tr-pill-miss    { background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.4); }
+  .tr-pill-pending { background: rgba(148,163,184,0.14); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.35); }
+
+  .cal-row {
+      display: grid; grid-template-columns: 80px 1fr 1fr 1fr; gap: 6px;
+      font-size: 0.8rem; padding: 3px 0;
+      border-bottom: 1px dashed rgba(148,163,255,0.07);
+      font-variant-numeric: tabular-nums;
+  }
+  .cal-row:last-child { border-bottom: none; }
+  .cal-row.cal-head {
+      font-size: 0.62rem; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      border-bottom: 1px solid rgba(148,163,255,0.12);
+  }
+
   /* Earnings history table */
   .eh-row {
       display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; gap: 6px;

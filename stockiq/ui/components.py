@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable, Optional, Tuple
 
+import pandas as pd
 import streamlit as st
 
 # ---------------------------------------------------------------------------
@@ -230,6 +231,104 @@ def probability_scenarios_combined(probs: dict, targets: dict, current: Optional
         )
     st.markdown(
         panel_open("AI scenario & targets", "12m horizon") + body + panel_close(),
+        unsafe_allow_html=True,
+    )
+
+
+def track_record_block(summary: dict) -> None:
+    """Render overall hit-rate + calibration buckets + recent predictions."""
+    total = summary.get("total", 0)
+    if total == 0:
+        st.markdown(
+            panel_open("Prediction track record", "builds over time")
+            + '<div class="sent-label">No predictions logged yet. '
+              'Run analysis on a few tickers — each call is tracked and '
+              'scored automatically after the resolution horizon.</div>'
+            + panel_close(),
+            unsafe_allow_html=True,
+        )
+        return
+
+    resolved = summary.get("resolved", 0)
+    pending = summary.get("pending", 0)
+    hit_rate = summary.get("hit_rate")
+    hits = summary.get("hits", 0)
+
+    overall = (
+        f'<div class="tr-headline">'
+        f'<div><div class="tr-big">{hits}/{resolved}</div>'
+        f'<div class="tr-sub">Directional hits</div></div>'
+        f'<div><div class="tr-big">{fmt_pct_ratio(hit_rate, 1) if hit_rate is not None else "—"}</div>'
+        f'<div class="tr-sub">Hit rate</div></div>'
+        f'<div><div class="tr-big">{pending}</div>'
+        f'<div class="tr-sub">Pending</div></div>'
+        f'</div>'
+    )
+
+    calibration_html = ""
+    cal = summary.get("calibration") or []
+    if cal:
+        rows = ""
+        for row in cal:
+            # colour the hit_rate green/red relative to avg_confidence
+            delta = row["hit_rate"] - row["avg_confidence"]
+            cls = _cls(delta)
+            rows += (
+                f'<div class="cal-row">'
+                f'<div>{row["range"]}</div>'
+                f'<div class="eh-v">n={row["n"]}</div>'
+                f'<div class="eh-v">{fmt_pct_ratio(row["hit_rate"], 1)}</div>'
+                f'<div class="eh-v {cls}">{fmt_pct(delta*100, decimals=1)}</div>'
+                f'</div>'
+            )
+        calibration_html = (
+            '<div class="tr-section">Calibration by confidence</div>'
+            '<div class="cal-row cal-head">'
+            '<div>Range</div><div class="eh-v">N</div>'
+            '<div class="eh-v">Hit</div><div class="eh-v">vs Conf</div>'
+            '</div>'
+            + rows
+        )
+
+    recent = summary.get("recent") or []
+    recent_html = ""
+    if recent:
+        rows = ""
+        for r in recent[:5]:
+            hit = r.get("hit")
+            if hit is True:
+                pill = '<span class="tr-pill tr-pill-hit">HIT</span>'
+            elif hit is False:
+                pill = '<span class="tr-pill tr-pill-miss">MISS</span>'
+            else:
+                pill = '<span class="tr-pill tr-pill-pending">PEND</span>'
+            ts = r.get("timestamp")
+            try:
+                ts_str = pd.to_datetime(ts).strftime("%m/%d %H:%M")
+            except Exception:
+                ts_str = "—"
+            dir_cls = {"BULLISH": "up", "BEARISH": "down"}.get(
+                (r.get("direction") or "").upper(), "flat"
+            )
+            rows += (
+                f'<div class="tr-row">'
+                f'<div>{ts_str}</div>'
+                f'<div class="tr-tkr">{r.get("ticker", "—")}</div>'
+                f'<div class="{dir_cls}">{r.get("direction", "—")}</div>'
+                f'<div class="eh-v">{fmt_pct_ratio(r.get("confidence"), 0)}</div>'
+                f'<div>{pill}</div>'
+                f'</div>'
+            )
+        recent_html = (
+            '<div class="tr-section">Recent predictions</div>' + rows
+        )
+
+    st.markdown(
+        panel_open(
+            "Prediction track record",
+            f"{resolved} resolved · {pending} pending",
+        )
+        + overall + calibration_html + recent_html + panel_close(),
         unsafe_allow_html=True,
     )
 
