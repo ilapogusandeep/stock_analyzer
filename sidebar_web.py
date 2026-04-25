@@ -335,14 +335,6 @@ with c_left:
     # Options flow — put/call ratios + ATM IV from nearest expiry
     options_flow_block(options_flow)
 
-    # Earnings history — fundamental data, fits with Valuation/Health
-    # rather than the AI-prediction column on the right.
-    earnings_hist = (
-        (inst.get("earnings_data") or {}).get("history", [])
-        if isinstance(inst, dict) else []
-    )
-    earnings_history_block(earnings_hist)
-
 
 # ---- Middle column: price chart + technicals + performance -----------------
 
@@ -482,6 +474,14 @@ with c_smart:
     institutional_holders_block(top_holders, max_items=8)
     # Unusual options — same "smart money positioning" theme as 13F
     unusual_options_block(unusual_opts)
+    # Earnings history — moved here from col 1 to balance column
+    # heights. Quarterly beats/misses pair reasonably with 13F filings
+    # (both are "what the institutional world has been seeing").
+    earnings_hist = (
+        (inst.get("earnings_data") or {}).get("history", [])
+        if isinstance(inst, dict) else []
+    )
+    earnings_history_block(earnings_hist)
 
 
 # ---- Right column: AI predictions + backtest --------------------------------
