@@ -314,6 +314,24 @@ DENSE_DARK_CSS = """
   .uo-agg.down { background: rgba(239,68,68,0.20); color: #f87171; }
   .uo-agg.flat { background: rgba(148,163,255,0.08); color: #94a3b8; }
 
+  /* 3-month regime panel */
+  .rg-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin: 4px 0 6px;
+      font-size: 0.95rem;
+  }
+  .rg-label { font-weight: 700; letter-spacing: 0.05em; }
+  .rg-label.up   { color: #4ade80; }
+  .rg-label.down { color: #f87171; }
+  .rg-label.flat { color: #fbbf24; }
+  .rg-conf { color: #94a3b8; font-size: 0.78rem; }
+  .rg-mix {
+      display: flex; gap: 14px; flex-wrap: wrap;
+      font-size: 0.74rem; color: #94a3b8;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+  }
+
   /* Performance pills (embedded in panel header) */
   .ps-row {
       display: inline-flex;

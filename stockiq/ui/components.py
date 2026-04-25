@@ -266,6 +266,48 @@ def probability_scenarios_combined(
     )
 
 
+def regime_3m_block(regime: dict) -> None:
+    """One-line 3-month regime indicator. Sparse on purpose — at this
+    horizon a single price target on a single ticker is mostly noise,
+    so we just label the regime and show the model's accuracy.
+    """
+    if not regime:
+        return
+
+    label = regime.get("regime", "—")
+    cls = {"BULLISH": "up", "BEARISH": "down", "SIDEWAYS": "flat"}.get(label, "flat")
+    emoji = {"BULLISH": "🟢", "BEARISH": "🔴", "SIDEWAYS": "🟡"}.get(label, "⚪")
+    conf = regime.get("confidence")
+    conf_str = f"{conf*100:.0f}%" if isinstance(conf, (int, float)) else "—"
+
+    accs = list((regime.get("model_accuracies") or {}).values())
+    accs = [a for a in accs if a is not None]
+    sub = "63d horizon"
+    if accs:
+        sub += f" · accuracy {sum(accs)/len(accs)*100:.0f}%"
+
+    probs = regime.get("probabilities") or {}
+    bull_p = probs.get("BULLISH", 0) * 100
+    side_p = probs.get("SIDEWAYS", 0) * 100
+    bear_p = probs.get("BEARISH", 0) * 100
+
+    body = (
+        f'<div class="rg-row">'
+        f'<span class="rg-label {cls}">{emoji} {label}</span>'
+        f'<span class="rg-conf">conf {conf_str}</span>'
+        f'</div>'
+        f'<div class="rg-mix">'
+        f'<span class="rg-mix-l">B {bull_p:.0f}%</span>'
+        f'<span class="rg-mix-l">S {side_p:.0f}%</span>'
+        f'<span class="rg-mix-l">D {bear_p:.0f}%</span>'
+        f'</div>'
+    )
+    st.markdown(
+        panel_open("AI · 3 month regime", sub) + body + panel_close(),
+        unsafe_allow_html=True,
+    )
+
+
 def news_feed_block(articles: list, max_items: int = 20) -> None:
     """Show the actual headlines + per-article sentiment score that fed the
     model. Transparency so users can see the 'evidence'. Rendered inside a

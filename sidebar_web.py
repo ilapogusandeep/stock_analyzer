@@ -36,7 +36,7 @@ def _import_stockiq_modules():
             institutional_holders_block, kv_block, news_feed_block,
             options_flow_block, panel_close, panel_open, performance_bars,
             performance_pills_html, probability_scenarios_combined,
-            unusual_options_block,
+            regime_3m_block, unusual_options_block,
         )
         from stockiq.ui.theme import inject_theme
         return locals()
@@ -191,6 +191,7 @@ fund = data.get("fundamental_data", {}) or {}
 sent = data.get("sentiment_data", {}) or {}
 ml = data.get("ml_prediction") or {}
 ml_1m = data.get("ml_prediction_1m") or {}
+regime_3m = data.get("regime_3m") or {}
 bt = data.get("backtest_results") or {}
 inst = data.get("institutional_data", {}) or {}
 
@@ -497,6 +498,14 @@ with c_right:
 
     if ml_1m:
         _render_forecast(ml_1m, "AI · 1 month", _accuracy_sub(ml_1m, "21d horizon"))
+
+    # 3-month regime indicator (no fake price target — just the bucket)
+    if regime_3m:
+        try:
+            regime_3m_block(regime_3m)
+        except Exception:
+            # Older cached components.py won't have this function. Skip.
+            pass
 
     # Earnings history (from yfinance via institutional_data)
     earnings_hist = (

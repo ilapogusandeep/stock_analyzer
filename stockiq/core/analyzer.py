@@ -367,16 +367,25 @@ class UniversalStockAnalyzer:
         # Enhanced ML prediction at multiple horizons.
         ml_prediction = None       # 1 week  (5 trading days)
         ml_prediction_1m = None    # 1 month (21 trading days)
+        regime_3m = None           # 3 months — classified, not priced
         if show_ml and ML_AVAILABLE:
             ml_prediction = self.create_enhanced_ml_prediction(
                 hist, tech_data, fundamental_data, sentiment_data,
                 enhanced_data, institutional_data=institutional_data,
-                sector_etf_hist=sector_etf_hist, horizon_days=5,
+                sector_etf_hist=sector_etf_hist,
+                earnings_data=earnings_data, horizon_days=5,
             )
             ml_prediction_1m = self.create_enhanced_ml_prediction(
                 hist, tech_data, fundamental_data, sentiment_data,
                 enhanced_data, institutional_data=institutional_data,
-                sector_etf_hist=sector_etf_hist, horizon_days=21,
+                sector_etf_hist=sector_etf_hist,
+                earnings_data=earnings_data, horizon_days=21,
+            )
+            regime_3m = self.create_regime_prediction(
+                hist, tech_data, fundamental_data, sentiment_data,
+                enhanced_data, institutional_data=institutional_data,
+                sector_etf_hist=sector_etf_hist,
+                earnings_data=earnings_data, horizon_days=63,
             )
 
         # Enhanced backtesting with ML validation
@@ -393,6 +402,7 @@ class UniversalStockAnalyzer:
             'earnings_data': earnings_data,
             'ml_prediction': ml_prediction,
             'ml_prediction_1m': ml_prediction_1m,
+            'regime_3m': regime_3m,
             'backtest_results': backtest_results,
             'institutional_data': institutional_data,
         }
@@ -1047,7 +1057,7 @@ class UniversalStockAnalyzer:
         else:
             return f"{scenario}. Mixed signals across technical indicators."
     
-    def create_enhanced_ml_prediction(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data, institutional_data=None, sector_etf_hist=None, horizon_days=5):
+    def create_enhanced_ml_prediction(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data, institutional_data=None, sector_etf_hist=None, earnings_data=None, horizon_days=5):
         """Create enhanced ML prediction with multiple data sources.
 
         ``horizon_days`` controls the prediction window:
@@ -1072,6 +1082,7 @@ class UniversalStockAnalyzer:
                 hist, tech_data, fundamental_data, sentiment_data,
                 enhanced_data, institutional_data=institutional_data,
                 sector_etf_hist=sector_etf_hist,
+                earnings_data=earnings_data,
             )
 
             if len(features) < 50:  # Need minimum data for ML
@@ -1269,8 +1280,107 @@ class UniversalStockAnalyzer:
         except Exception as e:
             print(f"❌ Enhanced ML prediction error: {e}")
             return self.create_ml_prediction(hist, tech_data, fundamental_data, sentiment_data)
-    
-    def _create_enhanced_features(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data, institutional_data=None, sector_etf_hist=None):
+
+    def create_regime_prediction(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data, institutional_data=None, sector_etf_hist=None, earnings_data=None, horizon_days=63):
+        """3-class regime forecast (BULLISH / SIDEWAYS / BEARISH).
+
+        At 3-month horizons a single point price-target is honestly
+        noise on a single ticker, so we don't pretend. Instead we
+        classify whether the future return will exceed roughly half a
+        sigma in either direction. Sideways is the explicit middle
+        bucket — important because the model often shouldn't take a
+        directional view that far out.
+
+        Returns dict with regime, confidence, probabilities, accuracy.
+        """
+        if not ML_AVAILABLE:
+            return None
+        try:
+            from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+            from sklearn.preprocessing import StandardScaler
+
+            features = self._create_enhanced_features(
+                hist, tech_data, fundamental_data, sentiment_data,
+                enhanced_data, institutional_data=institutional_data,
+                sector_etf_hist=sector_etf_hist, earnings_data=earnings_data,
+            )
+            if len(features) < 80:
+                return None
+
+            future_return = (hist['Close'].shift(-horizon_days) / hist['Close']) - 1
+            future_return = future_return.iloc[: len(future_return) - horizon_days]
+
+            # Regime threshold: 0.5 sigma move over the horizon. Anything
+            # smaller is sideways noise; bigger is a true regime move.
+            try:
+                daily_vol = float(hist['Close'].pct_change().rolling(20).std().iloc[-1])
+            except Exception:
+                daily_vol = 0.015
+            if not (daily_vol and daily_vol > 0):
+                daily_vol = 0.015
+            threshold = daily_vol * (horizon_days ** 0.5) * 0.5
+
+            labels = pd.Series(1, index=future_return.index)  # 1 = SIDEWAYS
+            labels[future_return >  threshold] = 2  # BULLISH
+            labels[future_return < -threshold] = 0  # BEARISH
+
+            min_len = min(len(features), len(labels))
+            features = features.iloc[:min_len]
+            labels = labels.iloc[:min_len]
+            if min_len < 80:
+                return None
+
+            # Need at least 2 classes in train AND test for the model to
+            # be meaningful — otherwise it just memorizes one label.
+            split_idx = int(min_len * 0.8)
+            X_train, X_test = features.iloc[:split_idx], features.iloc[split_idx:]
+            y_train, y_test = labels.iloc[:split_idx], labels.iloc[split_idx:]
+            if y_train.nunique() < 2 or y_test.nunique() < 1:
+                return None
+
+            scaler = StandardScaler()
+            X_train_s = scaler.fit_transform(X_train)
+            X_test_s = scaler.transform(X_test)
+
+            rf = RandomForestClassifier(n_estimators=120, random_state=42, class_weight='balanced')
+            gb = GradientBoostingClassifier(n_estimators=120, random_state=42)
+            rf.fit(X_train_s, y_train)
+            gb.fit(X_train_s, y_train)
+
+            rf_acc = (rf.predict(X_test_s) == y_test).mean()
+            gb_acc = (gb.predict(X_test_s) == y_test).mean()
+
+            latest = scaler.transform(features.iloc[-1:].values)
+            # Probability per class — RF and GB may emit different class
+            # orderings, so normalize by the model's own classes_ attr.
+            def _proba_dict(model):
+                p = model.predict_proba(latest)[0]
+                return {int(c): float(p[i]) for i, c in enumerate(model.classes_)}
+
+            rf_p = _proba_dict(rf)
+            gb_p = _proba_dict(gb)
+            ensemble = {
+                cls: 0.6 * rf_p.get(cls, 0.0) + 0.4 * gb_p.get(cls, 0.0)
+                for cls in (0, 1, 2)
+            }
+            total = sum(ensemble.values()) or 1.0
+            ensemble = {k: v / total for k, v in ensemble.items()}
+
+            label_for = {0: "BEARISH", 1: "SIDEWAYS", 2: "BULLISH"}
+            best_cls = max(ensemble, key=ensemble.get)
+            return {
+                'horizon_days': horizon_days,
+                'regime': label_for[best_cls],
+                'confidence': ensemble[best_cls],
+                'probabilities': {label_for[c]: ensemble[c] for c in (0, 1, 2)},
+                'threshold': threshold,
+                'model_accuracies': {'RandomForest': rf_acc, 'GradientBoosting': gb_acc},
+            }
+        except Exception as e:
+            print(f"⚠️ Regime prediction error: {e}")
+            return None
+
+    def _create_enhanced_features(self, hist, tech_data, fundamental_data, sentiment_data, enhanced_data, institutional_data=None, sector_etf_hist=None, earnings_data=None):
         """Create enhanced feature set from multiple data sources"""
         try:
             # Basic technical features
@@ -1320,6 +1430,23 @@ class UniversalStockAnalyzer:
                     if den > 0:
                         inst_net_flow = num / den
             features['inst_net_flow'] = inst_net_flow
+
+            # Earnings proximity — volatility (and surprise risk) is well
+            # documented to spike in the 1-2 weeks around an earnings
+            # release. Capture days_to_earnings (capped at 60 to avoid the
+            # tree splitting on irrelevant 100-day buckets) and a binary
+            # "earnings within 14 days" flag so the model learns the
+            # short-window effect distinctly from the long-window one.
+            days_to_earnings = 60
+            if isinstance(earnings_data, dict):
+                dte = earnings_data.get('days_to_earnings')
+                if dte is not None:
+                    try:
+                        days_to_earnings = max(0, min(60, int(dte)))
+                    except (TypeError, ValueError):
+                        days_to_earnings = 60
+            features['days_to_earnings'] = days_to_earnings
+            features['earnings_imminent'] = 1 if days_to_earnings <= 14 else 0
             
             # Technical indicators
             features['rsi'] = self._calculate_rsi(hist['Close'])
