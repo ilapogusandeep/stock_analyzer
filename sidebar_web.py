@@ -232,7 +232,7 @@ external_links(ticker, info)
 # Main grid — 3 columns
 # ---------------------------------------------------------------------------
 
-c_left, c_mid, c_right = st.columns([0.22, 0.56, 0.22])
+c_left, c_mid, c_smart, c_right = st.columns([0.18, 0.42, 0.20, 0.20])
 
 # ---- Left column: fundamentals + sentiment ---------------------------------
 
@@ -298,6 +298,37 @@ with c_left:
             ("Institutional",  fmt_pct_ratio(inst_pct, 1) if inst_pct else "—"),
         ],
         sub="short · ownership",
+        cols=2,
+    )
+
+    # --- Technical — moved to the left column so the fundamentals +
+    #     RSI/MACD/SMA/vol stack lives together as "facts about the
+    #     stock", separate from the chart (col 2) and AI (col 4).
+    rsi_v = tech.get("rsi", 0) or 0
+    rsi_state = ("🔴 Overbought" if rsi_v > 70 else
+                 "🟢 Oversold" if rsi_v < 30 else "🟡 Neutral")
+    macd_v = tech.get("macd")
+    macd_state = (
+        "🟢 Bullish" if (macd_v is not None and macd_v > 0)
+        else "🔴 Bearish" if (macd_v is not None and macd_v < 0)
+        else "—"
+    )
+    rsi_str = f"{rsi_v:.1f} {rsi_state.split(' ', 1)[1]}" if rsi_v else "—"
+    macd_str = (
+        f"{macd_v:+.2f} {macd_state.split(' ', 1)[1]}"
+        if macd_v is not None else "—"
+    )
+    kv_block(
+        "Technical",
+        [
+            ("RSI (14)",       rsi_str),
+            ("MACD",           macd_str),
+            ("SMA 20",         f"${tech.get('sma_20', 0):,.2f}" if tech.get('sma_20') else "—"),
+            ("SMA 50",         f"${tech.get('sma_50', 0):,.2f}" if tech.get('sma_50') else "—"),
+            ("SMA 200",        f"${tech.get('sma_200', 0):,.2f}" if tech.get('sma_200') else "—"),
+            ("Volatility 20d", f"{tech.get('volatility_20d', 0):.1f}%" if tech.get('volatility_20d') else "—"),
+        ],
+        sub="14d RSI · 12/26/9 MACD",
         cols=2,
     )
 
@@ -389,98 +420,68 @@ with c_mid:
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
     st.markdown("</div>" + panel_close(), unsafe_allow_html=True)
 
-    mid_l, mid_r = st.columns(2)
-    with mid_l:
-        rsi_v = tech.get("rsi", 0) or 0
-        rsi_state = ("🔴 Overbought" if rsi_v > 70 else
-                     "🟢 Oversold" if rsi_v < 30 else "🟡 Neutral")
-        macd_v = tech.get("macd")
-        macd_state = (
-            "🟢 Bullish" if (macd_v is not None and macd_v > 0)
-            else "🔴 Bearish" if (macd_v is not None and macd_v < 0)
-            else "—"
-        )
-        rsi_str = f"{rsi_v:.1f} {rsi_state.split(' ', 1)[1]}" if rsi_v else "—"
-        macd_str = (
-            f"{macd_v:+.2f} {macd_state.split(' ', 1)[1]}"
-            if macd_v is not None else "—"
-        )
+    # --- Analyst consensus + multi-source sentiment under the chart
+    #     (full middle-column width now that Technical and holders have
+    #     moved into the flanking narrow columns). ---------------------
+    rec_key = info.get("recommendationKey", "") or ""
+    rec_emoji = {
+        "strong_buy": "🟢", "buy": "🟢",
+        "hold": "🟡",
+        "underperform": "🔴", "sell": "🔴", "strong_sell": "🔴",
+    }.get(rec_key.lower(), "⚪")
+    rec_mean = info.get("recommendationMean")
+    n_analysts = info.get("numberOfAnalystOpinions")
+    tgt_mean = info.get("targetMeanPrice")
+    tgt_low = info.get("targetLowPrice")
+    tgt_high = info.get("targetHighPrice")
+    current_px = tech.get("current_price")
+
+    implied_upside = "—"
+    if tgt_mean and current_px:
+        implied_upside = fmt_pct((tgt_mean / current_px - 1) * 100, decimals=1)
+
+    target_range_str = "—"
+    if tgt_low and tgt_high:
+        target_range_str = f"${tgt_low:,.0f} – ${tgt_high:,.0f}"
+
+    sent_label = (sent or {}).get("sentiment_label", "NEUTRAL") if sent else "—"
+    sent_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(sent_label, "⚪")
+
+    rows = []
+    if n_analysts or tgt_mean or rec_mean:
+        rows += [
+            ("Rating",         f"{rec_emoji} {rec_key.replace('_', ' ').upper() or '—'}"),
+            ("Score (1–5)",    fmt_ratio(rec_mean, 2) if rec_mean else "—"),
+            ("Analysts",       str(int(n_analysts)) if n_analysts else "—"),
+            ("Target Mean",    fmt_price(tgt_mean) if tgt_mean else "—"),
+            ("Range",          target_range_str),
+            ("Upside",         implied_upside),
+        ]
+    if sent:
+        rows += [
+            ("Sentiment",   f"{sent_emoji} {sent_label}"),
+            ("Overall",     f"{sent.get('overall_sentiment', 0):+.3f}"),
+            ("News score",  f"{sent.get('news_sentiment', 0):+.3f}"),
+            ("Confidence",  fmt_pct_ratio(sent.get("confidence"), 0)),
+        ]
+    if rows:
         kv_block(
-            "Technical",
-            [
-                ("RSI (14)",       rsi_str),
-                ("MACD",           macd_str),
-                ("SMA 20",         f"${tech.get('sma_20', 0):,.2f}" if tech.get('sma_20') else "—"),
-                ("SMA 50",         f"${tech.get('sma_50', 0):,.2f}" if tech.get('sma_50') else "—"),
-                ("SMA 200",        f"${tech.get('sma_200', 0):,.2f}" if tech.get('sma_200') else "—"),
-                ("Volatility 20d", f"{tech.get('volatility_20d', 0):.1f}%" if tech.get('volatility_20d') else "—"),
-            ],
-            sub="14d RSI · 12/26/9 MACD",
+            "Analyst & sentiment", rows,
+            sub="12m targets · multi-source",
             cols=2,
         )
-        # --- Analyst consensus + multi-source sentiment (stacked under
-        #     Technical so it fills the space next to Top Holders) ------
-        rec_key = info.get("recommendationKey", "") or ""
-        rec_emoji = {
-            "strong_buy": "🟢", "buy": "🟢",
-            "hold": "🟡",
-            "underperform": "🔴", "sell": "🔴", "strong_sell": "🔴",
-        }.get(rec_key.lower(), "⚪")
-        rec_mean = info.get("recommendationMean")
-        n_analysts = info.get("numberOfAnalystOpinions")
-        tgt_mean = info.get("targetMeanPrice")
-        tgt_low = info.get("targetLowPrice")
-        tgt_high = info.get("targetHighPrice")
-        current_px = tech.get("current_price")
 
-        implied_upside = "—"
-        if tgt_mean and current_px:
-            implied_upside = fmt_pct((tgt_mean / current_px - 1) * 100, decimals=1)
 
-        # Compact target range to fit a half-width column: strip cents.
-        target_range_str = "—"
-        if tgt_low and tgt_high:
-            target_range_str = f"${tgt_low:,.0f} – ${tgt_high:,.0f}"
+# ---- Smart-money column (col 3): institutional holders + unusual opts ------
 
-        sent_label = (sent or {}).get("sentiment_label", "NEUTRAL") if sent else "—"
-        sent_emoji = {"POSITIVE": "🟢", "NEGATIVE": "🔴"}.get(sent_label, "⚪")
-
-        rows = []
-        if n_analysts or tgt_mean or rec_mean:
-            rows += [
-                ("Rating",         f"{rec_emoji} {rec_key.replace('_', ' ').upper() or '—'}"),
-                ("Score (1–5)",    fmt_ratio(rec_mean, 2) if rec_mean else "—"),
-                ("Analysts",       str(int(n_analysts)) if n_analysts else "—"),
-                ("Target Mean",    fmt_price(tgt_mean) if tgt_mean else "—"),
-                ("Range",          target_range_str),
-                ("Upside",         implied_upside),
-            ]
-        if sent:
-            rows += [
-                ("Sentiment",   f"{sent_emoji} {sent_label}"),
-                ("Overall",     f"{sent.get('overall_sentiment', 0):+.3f}"),
-                ("News score",  f"{sent.get('news_sentiment', 0):+.3f}"),
-                ("Confidence",  fmt_pct_ratio(sent.get("confidence"), 0)),
-            ]
-        if rows:
-            kv_block(
-                "Analyst & sentiment", rows,
-                sub="12m targets · multi-source",
-                cols=2,
-            )
-
-    with mid_r:
-        # Top hedge fund / institutional holders — latest 13F filings
-        top_holders = (
-            (inst.get("institutional_holders") or {}).get("top_holders", [])
-            if isinstance(inst, dict) else []
-        )
-        institutional_holders_block(top_holders, max_items=8)
-
-        # Unusual options — same "smart money positioning" theme as the
-        # 13F holders above, and fills the height mid_r was short vs
-        # mid_l (Technical + Analyst & sentiment).
-        unusual_options_block(unusual_opts)
+with c_smart:
+    top_holders = (
+        (inst.get("institutional_holders") or {}).get("top_holders", [])
+        if isinstance(inst, dict) else []
+    )
+    institutional_holders_block(top_holders, max_items=8)
+    # Unusual options — same "smart money positioning" theme as 13F
+    unusual_options_block(unusual_opts)
 
 
 # ---- Right column: AI predictions + backtest --------------------------------
