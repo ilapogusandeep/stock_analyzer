@@ -162,12 +162,22 @@ class PredictionLog:
             return self._resolve_supabase(max_to_resolve)
         return self._resolve_parquet(max_to_resolve)
 
-    def summary(self) -> dict[str, Any]:
-        """Overall counts + hit-rate + last N rows + calibration buckets."""
+    def summary(self, horizon_days: Optional[int] = None) -> dict[str, Any]:
+        """Overall counts + hit-rate + last N rows + calibration buckets.
+
+        ``horizon_days`` filters to predictions made at that horizon
+        (5 for 1w, 21 for 1m, 63 for 3m). Returns the unfiltered totals
+        when ``None``.
+        """
         if self._using_supabase():
             df = self._read_all_supabase()
         else:
             df = self._read()
+        if horizon_days is not None and "resolution_horizon_days" in df.columns:
+            try:
+                df = df[df["resolution_horizon_days"].astype(int) == int(horizon_days)]
+            except Exception:
+                df = df.iloc[0:0]
         return self._summarize_df(df)
 
     # ------------------------------------------------------------------
@@ -428,3 +438,82 @@ class PredictionLog:
             "recent": recent,
             "calibration": calibration,
         }
+
+
+# ---------------------------------------------------------------------------
+# Confidence calibration — backend feedback loop
+# ---------------------------------------------------------------------------
+
+# How many resolved rows we need before applying calibration. Below this
+# the historical hit rate is too noisy to trust as a shrinkage signal.
+_CALIBRATION_MIN_N = 5
+
+
+def calibrate_probs(
+    bullish: float, neutral: float, bearish: float, summary: dict
+) -> tuple[float, float, float, dict]:
+    """Shrink raw model probabilities toward the no-edge baseline (1/3
+    each) based on the model's historical hit rate at this horizon.
+
+    The amount of shrinkage scales with how much edge we've actually
+    demonstrated. If the model has been right 50% of the time on
+    binary-direction predictions, the bars get pulled all the way to
+    uniform (1/3, 1/3, 1/3). At 75% the bars stay roughly where the
+    model said. Below 50% (anti-signal), we still shrink rather than
+    invert -- a small bad sample is more likely noise than a true
+    inverted signal.
+
+    Returns ``(bull', neut', bear', meta)`` where meta describes whether
+    calibration was applied so the UI can label it.
+    """
+    resolved = int(summary.get("resolved", 0) or 0)
+    hit_rate = summary.get("hit_rate")
+
+    if resolved < _CALIBRATION_MIN_N or hit_rate is None:
+        return bullish, neutral, bearish, {
+            "applied": False,
+            "reason": "untracked",
+            "n": resolved,
+            "hit_rate": hit_rate,
+        }
+
+    # Trust scales linearly with edge: 50% hit rate -> 0 trust, 100% -> 1.
+    edge = max(0.0, abs(float(hit_rate) - 0.5))
+    trust = min(1.0, edge * 2.0)
+
+    target = 1.0 / 3.0
+    cal_bull = bullish + (target - bullish) * (1 - trust)
+    cal_neut = neutral + (target - neutral) * (1 - trust)
+    cal_bear = bearish + (target - bearish) * (1 - trust)
+
+    # Renormalize to defend against any tiny floating-point drift.
+    s = cal_bull + cal_neut + cal_bear
+    if s > 0:
+        cal_bull /= s; cal_neut /= s; cal_bear /= s
+
+    return cal_bull, cal_neut, cal_bear, {
+        "applied": True,
+        "trust": trust,
+        "n": resolved,
+        "hit_rate": float(hit_rate),
+    }
+
+
+def calibrate_confidence(raw_conf: float, summary: dict) -> tuple[float, dict]:
+    """Shrink a single direction's confidence toward 50% by the same
+    edge-scaled trust factor used in ``calibrate_probs``."""
+    resolved = int(summary.get("resolved", 0) or 0)
+    hit_rate = summary.get("hit_rate")
+
+    if resolved < _CALIBRATION_MIN_N or hit_rate is None:
+        return raw_conf, {"applied": False, "n": resolved, "hit_rate": hit_rate}
+
+    edge = max(0.0, abs(float(hit_rate) - 0.5))
+    trust = min(1.0, edge * 2.0)
+    cal = 0.5 + (raw_conf - 0.5) * trust
+    return cal, {
+        "applied": True,
+        "trust": trust,
+        "n": resolved,
+        "hit_rate": float(hit_rate),
+    }

@@ -36,7 +36,7 @@ def _import_stockiq_modules():
             institutional_holders_block, kv_block, news_feed_block,
             options_flow_block, panel_close, panel_open, performance_bars,
             performance_pills_html, probability_scenarios_combined,
-            regime_3m_block, track_record_block, unusual_options_block,
+            regime_3m_block, unusual_options_block,
         )
         from stockiq.ui.theme import inject_theme
         return locals()
@@ -475,43 +475,74 @@ with c_mid:
 # ---- Right column: AI predictions + backtest --------------------------------
 
 with c_right:
-    def _accuracy_sub(pred: dict, horizon_label: str) -> str:
-        """Build a subtitle showing the test accuracy of the chronological
-        backtest (the only honest way to gauge a time-series model)."""
+    # Pull horizon-scoped track records so we can shrink raw model
+    # confidence toward the no-edge baseline based on how the model has
+    # actually performed at each horizon. Falls back to no calibration
+    # silently if Supabase is unavailable.
+    _summary_5d = {}
+    _summary_21d = {}
+    _summary_63d = {}
+    try:
+        from stockiq.core.prediction_log import calibrate_probs as _cal_probs
+        _summary_5d = _pred_log.summary(horizon_days=5) or {}
+        _summary_21d = _pred_log.summary(horizon_days=21) or {}
+        _summary_63d = _pred_log.summary(horizon_days=63) or {}
+    except Exception:
+        _cal_probs = None  # type: ignore[assignment]
+
+    def _accuracy_sub(pred: dict, horizon_label: str, cal_meta: dict) -> str:
+        """Subtitle: walk-forward test accuracy + live-tracking footnote.
+
+        ``cal_meta`` comes from calibrate_probs and tells us whether the
+        live track record had enough data to apply shrinkage.
+        """
+        parts = [horizon_label]
         ma = (pred.get("model_accuracies") or {})
         accs = [v for v in ma.values() if v is not None]
         if accs:
             avg = sum(accs) / len(accs)
-            return f"{horizon_label} · accuracy {avg*100:.0f}%"
-        return horizon_label
+            parts.append(f"accuracy {avg*100:.0f}%")
+        if cal_meta and cal_meta.get("applied"):
+            parts.append(f"calibrated · n={cal_meta.get('n', 0)}")
+        elif cal_meta:
+            n = cal_meta.get("n", 0)
+            if n:
+                parts.append(f"untracked · n={n}")
+        return " · ".join(parts)
 
-    def _render_forecast(pred: dict, header_title: str, header_sub: str):
-        """Render a horizon header band + the scenarios panel.
-
-        Calls probability_scenarios_combined with title/sub kwargs when
-        the loaded function accepts them, otherwise falls back to the
-        original positional-only signature plus a separate header band.
-        Defends against Streamlit Cloud bytecode-cache mismatches when
-        the panel function and the caller deploy at different rates.
-        """
+    def _render_forecast(pred: dict, header_title: str, horizon_label: str,
+                         horizon_summary: dict):
+        """Render a horizon header band + the scenarios panel, with
+        backend-calibrated probabilities."""
         probs = pred.get("scenario_probabilities", {}) or {}
         targets = pred.get("scenario_targets", {}) or {}
         current = tech.get("current_price")
+
+        # Apply backend calibration when we have enough resolved data.
+        cal_meta: dict = {"applied": False}
+        if _cal_probs is not None and horizon_summary:
+            b = float(probs.get("bullish") or 0)
+            n = float(probs.get("neutral") or 0)
+            d = float(probs.get("bearish") or 0)
+            cb, cn, cd, cal_meta = _cal_probs(b, n, d, horizon_summary)
+            probs = {"bullish": cb, "neutral": cn, "bearish": cd}
+
+        sub = _accuracy_sub(pred, horizon_label, cal_meta)
         try:
             probability_scenarios_combined(
                 probs, targets, current,
-                title=header_title, sub=header_sub,
+                title=header_title, sub=sub,
             )
         except TypeError:
             st.markdown(
                 f'<div class="hb"><span>{header_title}</span>'
-                f'<span class="hb-sub">{header_sub}</span></div>',
+                f'<span class="hb-sub">{sub}</span></div>',
                 unsafe_allow_html=True,
             )
             probability_scenarios_combined(probs, targets, current)
 
     if ml:
-        _render_forecast(ml, "AI · 1 week", _accuracy_sub(ml, "5d horizon"))
+        _render_forecast(ml, "AI · 1 week", "5d horizon", _summary_5d)
     else:
         st.markdown(
             panel_open("AI · 1 week")
@@ -521,9 +552,29 @@ with c_right:
         )
 
     if ml_1m:
-        _render_forecast(ml_1m, "AI · 1 month", _accuracy_sub(ml_1m, "21d horizon"))
+        _render_forecast(ml_1m, "AI · 1 month", "21d horizon", _summary_21d)
 
-    # 3-month regime indicator (no fake price target — just the bucket)
+    # 3-month regime indicator (no fake price target — just the bucket).
+    # Calibration: shrink the regime probabilities toward uniform if the
+    # 63-day model has enough history to judge.
+    if regime_3m and _cal_probs is not None and _summary_63d:
+        try:
+            _rp = regime_3m.get("probabilities") or {}
+            cb, cn, cd, _meta = _cal_probs(
+                float(_rp.get("BULLISH") or 0),
+                float(_rp.get("SIDEWAYS") or 0),
+                float(_rp.get("BEARISH") or 0),
+                _summary_63d,
+            )
+            # Best regime label from the calibrated probs
+            cal_probs = {"BULLISH": cb, "SIDEWAYS": cn, "BEARISH": cd}
+            best = max(cal_probs, key=cal_probs.get)
+            regime_3m = {**regime_3m,
+                         "regime": best,
+                         "confidence": cal_probs[best],
+                         "probabilities": cal_probs}
+        except Exception:
+            pass
     if regime_3m:
         try:
             regime_3m_block(regime_3m)
@@ -543,14 +594,9 @@ with c_right:
 
     # News feed — per-article headlines + sentiment that fed the model.
     news_feed_block(sent.get("articles") or [], max_items=20)
-
-    # Prediction track record — backed by Supabase when configured (see
-    # migrations/001_predictions.sql). Falls back to the in-container
-    # parquet log otherwise. Empty until the first horizon resolves.
-    try:
-        track_record_block(_pred_log.summary())
-    except Exception as e:
-        st.caption(f"(track record unavailable: {e})")
+    # Track record stays in Supabase but is no longer surfaced here —
+    # the data drives backend confidence calibration instead of being a
+    # passive readout.
 
 
 st.markdown(
