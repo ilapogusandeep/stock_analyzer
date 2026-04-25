@@ -237,35 +237,41 @@ c_left, c_mid, c_right = st.columns([0.22, 0.56, 0.22])
 # ---- Left column: fundamentals + sentiment ---------------------------------
 
 with c_left:
-    # --- Fundamentals: valuation + health + 52-week range merged into a
-    #     single 2-column panel. Three panels with their own headers ate
-    #     ~600px of left-column height; this collapses them to ~250px
-    #     while keeping every metric.
+    # --- Valuation (6 metrics in a 2-col grid -> 3 rows) ----------------
+    kv_block(
+        "Valuation",
+        [
+            ("P/E",      fmt_ratio(fund.get("pe_ratio"), 1)),
+            ("Fwd P/E",  fmt_ratio(fund.get("forward_pe"), 1)),
+            ("PEG",      fmt_ratio(fund.get("peg_ratio"), 2)),
+            ("P/B",      fmt_ratio(fund.get("price_to_book"), 1)),
+            ("P/S",      fmt_ratio(fund.get("price_to_sales"), 1)),
+            ("Beta",     fmt_ratio(fund.get("beta"), 2)),
+        ],
+        sub="ratios",
+        cols=2,
+    )
+
+    # --- Health & Range (9 metrics in a 2-col grid -> 5 rows) -----------
     hi = info.get("fiftyTwoWeekHigh")
     lo = info.get("fiftyTwoWeekLow")
     price = tech.get("current_price")
     pct_from_hi = ((price / hi - 1) * 100) if (price and hi) else None
     pct_from_lo = ((price / lo - 1) * 100) if (price and lo) else None
     kv_block(
-        "Fundamentals",
+        "Health & Range",
         [
-            ("P/E",           fmt_ratio(fund.get("pe_ratio"), 1)),
-            ("Fwd P/E",       fmt_ratio(fund.get("forward_pe"), 1)),
-            ("PEG",           fmt_ratio(fund.get("peg_ratio"), 2)),
-            ("P/B",           fmt_ratio(fund.get("price_to_book"), 1)),
-            ("P/S",           fmt_ratio(fund.get("price_to_sales"), 1)),
-            ("Beta",          fmt_ratio(fund.get("beta"), 2)),
-            ("Curr Ratio",    fmt_ratio(fund.get("current_ratio"), 2)),
-            ("D/E",           fmt_ratio(fund.get("debt_to_equity"), 2)),
-            ("ROE",           fmt_pct_ratio(fund.get("return_on_equity"), 1)),
-            ("Margin",        fmt_pct_ratio(fund.get("profit_margin"), 1)),
-            ("Rev Growth",    fmt_pct_ratio(fund.get("revenue_growth"), 1)),
-            ("52w High",      f"${hi:,.2f}" if hi else "—"),
-            ("52w Low",       f"${lo:,.2f}" if lo else "—"),
-            ("From High",     fmt_pct(pct_from_hi, decimals=1) if pct_from_hi is not None else "—"),
-            ("From Low",      fmt_pct(pct_from_lo, decimals=1) if pct_from_lo is not None else "—"),
+            ("Curr Ratio", fmt_ratio(fund.get("current_ratio"), 2)),
+            ("D/E",        fmt_ratio(fund.get("debt_to_equity"), 2)),
+            ("ROE",        fmt_pct_ratio(fund.get("return_on_equity"), 1)),
+            ("Margin",     fmt_pct_ratio(fund.get("profit_margin"), 1)),
+            ("Rev Growth", fmt_pct_ratio(fund.get("revenue_growth"), 1)),
+            ("52w High",   f"${hi:,.2f}" if hi else "—"),
+            ("52w Low",    f"${lo:,.2f}" if lo else "—"),
+            ("From High",  fmt_pct(pct_from_hi, decimals=1) if pct_from_hi is not None else "—"),
+            ("From Low",   fmt_pct(pct_from_lo, decimals=1) if pct_from_lo is not None else "—"),
         ],
-        sub="valuation · health · range",
+        sub="balance sheet · 52w",
         cols=2,
     )
 
