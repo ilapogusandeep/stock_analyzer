@@ -216,7 +216,7 @@ DENSE_DARK_CSS = """
 
   /* News feed panel */
   .nf-scroll {
-      max-height: 220px;
+      max-height: 340px;
       overflow-y: auto;
       padding-right: 4px;
   }
