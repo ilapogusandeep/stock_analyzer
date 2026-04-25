@@ -89,14 +89,35 @@ def header_band(ticker: str, data: dict) -> None:
     company = info.get("longName") or info.get("shortName") or ""
     sector = info.get("sector") or "—"
 
-    # One-line business description spanning the full header width
-    # beneath ticker/price/signal/context. Prefer the first "real"
-    # sentence; skip short leading fragments like "Apple Inc." by
-    # requiring 60+ chars. CSS handles overflow with nowrap + ellipsis
-    # so the full text stays in the DOM without wrapping onto a second
-    # row.
+    # One-line info row spanning the full header width:
+    #   Industry · HQ city, state · N employees · Business summary
+    # Use the horizontal real estate we have to pack structured facts
+    # alongside the prose summary. CSS trims overflow with ellipsis so
+    # the row stays exactly one line regardless of viewport width.
+    facts: list[str] = []
+
+    industry = (info.get("industry") or "").strip()
+    if industry:
+        facts.append(industry)
+
+    city = (info.get("city") or "").strip()
+    state = (info.get("state") or "").strip()
+    country = (info.get("country") or "").strip()
+    hq_loc = ", ".join([p for p in [city, state or country] if p])
+    if hq_loc:
+        facts.append(f"HQ {hq_loc}")
+
+    emp = info.get("fullTimeEmployees")
+    if isinstance(emp, (int, float)) and emp > 0:
+        if emp >= 1_000_000:
+            facts.append(f"{emp/1_000_000:.1f}M employees")
+        elif emp >= 1_000:
+            facts.append(f"{emp/1_000:.0f}K employees")
+        else:
+            facts.append(f"{int(emp)} employees")
+
     summary = (info.get("longBusinessSummary") or "").strip()
-    desc = ""
+    first_sentence = ""
     if summary:
         search_from = 0
         while search_from < len(summary):
@@ -107,21 +128,27 @@ def header_band(ticker: str, data: dict) -> None:
                     break
             if i < 0:
                 break
-            candidate = summary[: i + 1]
-            if len(candidate) >= 60:
-                desc = candidate
+            cand = summary[: i + 1]
+            if len(cand) >= 60:
+                first_sentence = cand
                 break
             search_from = i + 2
-        if not desc:
-            desc = summary
-        # Safety cap so a pathological input can't push enormous HTML.
-        if len(desc) > 350:
-            cut = desc[:347].rsplit(" ", 1)[0]
-            desc = cut.rstrip(",.;: ") + "…"
-        desc = desc.replace("<", "&lt;").replace(">", "&gt;")
+        if not first_sentence:
+            first_sentence = summary
+
+    combined_parts = [f for f in facts]
+    if first_sentence:
+        combined_parts.append(first_sentence)
+    combined = " · ".join(combined_parts)
+
+    # Safety cap on DOM size (CSS handles the visual truncation).
+    if len(combined) > 500:
+        cut = combined[:497].rsplit(" ", 1)[0]
+        combined = cut.rstrip(",.;: ") + "…"
+    combined = combined.replace("<", "&lt;").replace(">", "&gt;")
 
     desc_html = (
-        f'<div class="hb-desc-row">{desc}</div>' if desc else ""
+        f'<div class="hb-desc-row">{combined}</div>' if combined else ""
     )
 
     html = f"""

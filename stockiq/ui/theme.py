@@ -92,26 +92,27 @@ DENSE_DARK_CSS = """
   .hb {
       display: grid;
       grid-template-columns: 1.1fr 1.2fr 0.8fr 2fr;
-      gap: 18px;
+      gap: 14px;
+      row-gap: 4px;
       align-items: center;
       background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(168, 85, 247, 0.14));
       border: 1px solid rgba(148, 163, 255, 0.25);
       border-radius: 10px;
-      padding: 10px 16px;
+      padding: 8px 16px;
       margin-bottom: 8px;
   }
   .hb-tkr { font-size: 2.1rem; font-weight: 800; color: #fff; letter-spacing: 0.03em; line-height: 1; }
   .hb-co  { color: #a5b4fc; font-size: 0.85rem; margin-top: 2px; }
   .hb-desc-row {
       grid-column: 1 / -1;
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(148,163,255,0.12);
+      margin-top: 3px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(148,163,255,0.10);
       color: #cbd5e1;
-      font-size: 0.76rem;
-      line-height: 1.35;
+      font-size: 0.72rem;
+      line-height: 1.2;
       font-style: italic;
-      opacity: 0.9;
+      opacity: 0.85;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
