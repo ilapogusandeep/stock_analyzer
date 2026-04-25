@@ -105,6 +105,8 @@ with tb_tkr:
         format_func=lambda t: f"{t}  —  {POPULAR_TICKERS.get(t.upper(), '')}".rstrip(" —"),
         accept_new_options=True,
         help="Type a ticker (AAPL) or company name (Apple) — any symbol works even if not listed.",
+        label_visibility="collapsed",
+        placeholder="Ticker or company",
     )
     ticker = (ticker_raw or "").strip().upper()
 with tb_fast:
