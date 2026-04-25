@@ -102,6 +102,15 @@ DENSE_DARK_CSS = """
   }
   .hb-tkr { font-size: 2.1rem; font-weight: 800; color: #fff; letter-spacing: 0.03em; line-height: 1; }
   .hb-co  { color: #a5b4fc; font-size: 0.85rem; margin-top: 2px; }
+  .hb-desc {
+      color: #94a3b8;
+      font-size: 0.72rem;
+      line-height: 1.35;
+      margin-top: 3px;
+      max-width: 520px;
+      font-style: italic;
+      opacity: 0.85;
+  }
   .hb-px  { font-size: 1.8rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
   .hb-chg { font-size: 0.9rem; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; }
   .up     { color: #22c55e; }

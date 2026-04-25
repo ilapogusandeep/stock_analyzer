@@ -89,11 +89,45 @@ def header_band(ticker: str, data: dict) -> None:
     company = info.get("longName") or info.get("shortName") or ""
     sector = info.get("sector") or "—"
 
+    # One-line business description. yfinance returns a long paragraph
+    # in longBusinessSummary -- trim to the first "real" sentence (or a
+    # word-boundary truncation at ~180 chars) so it fits a single line
+    # under the company name. Skip short "sentences" that are just the
+    # company name ending in "Inc.", "Corp.", etc.
+    summary = (info.get("longBusinessSummary") or "").strip()
+    desc = ""
+    if summary:
+        # Avoid splitting on common abbreviations' periods: require the
+        # candidate sentence to be at least 60 chars long before accepting.
+        search_from = 0
+        while search_from < len(summary):
+            i = -1
+            for pos in range(search_from, len(summary) - 1):
+                if summary[pos] in ".!?" and summary[pos + 1] == " ":
+                    i = pos
+                    break
+            if i < 0:
+                break
+            candidate = summary[: i + 1]
+            if len(candidate) >= 60:
+                desc = candidate
+                break
+            search_from = i + 2
+        if not desc:
+            desc = summary
+        if len(desc) > 180:
+            cut = desc[:177].rsplit(" ", 1)[0]
+            desc = cut.rstrip(",.;: ") + "…"
+        desc = desc.replace("<", "&lt;").replace(">", "&gt;")
+
+    desc_html = f'<div class="hb-desc">{desc}</div>' if desc else ""
+
     html = f"""
     <div class="hb">
       <div>
         <div class="hb-tkr">{ticker}</div>
         <div class="hb-co">{company}</div>
+        {desc_html}
       </div>
       <div>
         <div class="hb-px">{fmt_price(price)}</div>
