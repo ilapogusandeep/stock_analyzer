@@ -127,7 +127,7 @@ class PredictionLog:
     # Public API
     # ------------------------------------------------------------------
 
-    def _build_row(self, ticker: str, ml: dict, price: float) -> dict:
+    def _build_row(self, ticker: str, ml: dict, price: float, horizon_days: int) -> dict:
         probs = ml.get("scenario_probabilities", {}) or {}
         return {
             "ticker": ticker,
@@ -138,17 +138,23 @@ class PredictionLog:
             "bearish_prob": float(probs.get("bearish") or 0),
             "price_at_prediction": float(price),
             "price_target": float(ml.get("price_target") or 0) or None,
-            "resolution_horizon_days": int(self.horizon_days),
+            "resolution_horizon_days": int(horizon_days),
         }
 
-    def log(self, ticker: str, ml: dict, price: float) -> None:
-        """Record one prediction. Silently no-ops if ``ml`` is empty."""
+    def log(self, ticker: str, ml: dict, price: float,
+            horizon_days: Optional[int] = None) -> None:
+        """Record one prediction. Silently no-ops if ``ml`` is empty.
+
+        ``horizon_days`` overrides the instance default so a single
+        PredictionLog can track 1w / 1m / 3m predictions side by side.
+        """
         if not ml or price is None:
             return
+        h = int(horizon_days) if horizon_days is not None else self.horizon_days
         if self._using_supabase():
-            self._log_supabase(ticker, ml, price)
+            self._log_supabase(ticker, ml, price, h)
         else:
-            self._log_parquet(ticker, ml, price)
+            self._log_parquet(ticker, ml, price, h)
 
     def resolve_pending(self, max_to_resolve: int = 50) -> int:
         """Score any prediction older than horizon_days. Returns #resolved."""
@@ -168,12 +174,12 @@ class PredictionLog:
     # Supabase-backed implementations
     # ------------------------------------------------------------------
 
-    def _log_supabase(self, ticker: str, ml: dict, price: float) -> None:
+    def _log_supabase(self, ticker: str, ml: dict, price: float, horizon_days: int) -> None:
         try:
             import requests
         except ImportError:
             return
-        payload = self._build_row(ticker, ml, price)
+        payload = self._build_row(ticker, ml, price, horizon_days)
         # Supabase fills timestamp default + id; client doesn't send them.
         try:
             requests.post(
@@ -216,20 +222,30 @@ class PredictionLog:
         except ImportError:
             return 0
         try:
-            cutoff = (datetime.now(timezone.utc)
-                      - timedelta(days=self.horizon_days)).isoformat()
-            params = (
-                f"?select=*&hit=is.null&timestamp=lte.{cutoff}"
-                f"&order=timestamp.asc&limit={max_to_resolve}"
-            )
+            # Pull all unresolved rows; filter by per-row horizon in
+            # Python since Postgres expressions like
+            # `timestamp <= now() - resolution_horizon_days * interval '1 day'`
+            # aren't expressible via PostgREST query params.
             r = requests.get(
-                self._sb_url_for(params),
+                self._sb_url_for(
+                    "?select=*&hit=is.null&order=timestamp.asc&limit=500"
+                ),
                 headers=self._sb_headers(),
                 timeout=8,
             )
             if r.status_code != 200:
                 return 0
-            pending = r.json() or []
+            all_pending = r.json() or []
+            now = datetime.now(timezone.utc)
+            pending = []
+            for row in all_pending:
+                ts = pd.to_datetime(row.get("timestamp"), utc=True, errors="coerce")
+                if pd.isna(ts):
+                    continue
+                hd = int(row.get("resolution_horizon_days") or self.horizon_days)
+                if (now - ts.to_pydatetime()) >= timedelta(days=hd):
+                    pending.append(row)
+            pending = pending[:max_to_resolve]
             if not pending:
                 return 0
         except Exception:
@@ -290,8 +306,8 @@ class PredictionLog:
     # Parquet-backed implementations (fallback when Supabase isn't set up)
     # ------------------------------------------------------------------
 
-    def _log_parquet(self, ticker: str, ml: dict, price: float) -> None:
-        row = self._build_row(ticker, ml, price)
+    def _log_parquet(self, ticker: str, ml: dict, price: float, horizon_days: int) -> None:
+        row = self._build_row(ticker, ml, price, horizon_days)
         row.update({
             "id": uuid.uuid4().hex,
             "timestamp": datetime.now(timezone.utc),
@@ -310,12 +326,14 @@ class PredictionLog:
             return 0
 
         now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(days=self.horizon_days)
-
-        # Ensure timestamp is tz-aware UTC
         ts = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-
-        pending_mask = df["hit"].isna() & (ts <= cutoff)
+        # Per-row horizon — supports rows logged at different horizons.
+        hd_days = pd.to_numeric(
+            df.get("resolution_horizon_days", self.horizon_days),
+            errors="coerce",
+        ).fillna(self.horizon_days)
+        age_days = (now - ts).dt.total_seconds() / 86400.0
+        pending_mask = df["hit"].isna() & (age_days >= hd_days)
         pending_idx = df.index[pending_mask].tolist()[:max_to_resolve]
         if not pending_idx:
             return 0

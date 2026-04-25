@@ -161,15 +161,39 @@ if not data:
 # Remember what we analyzed so the next selection change can auto-fire.
 st.session_state.last_analyzed_ticker = ticker
 
-# --- Prediction log: record this call + lazily resolve any old pending rows.
-#    Stored as parquet under data/predictions.parquet at repo root.
+# --- Prediction log: record this call at each horizon + lazily resolve
+#    any old pending rows. Persists to Supabase when SUPABASE_URL/KEY
+#    secrets are set, else falls back to a parquet file under data/.
 _pred_log = PredictionLog(horizon_days=5)
 try:
-    _pred_log.log(
-        ticker=ticker,
-        ml=(data.get("ml_prediction") or {}),
-        price=(data.get("tech_data") or {}).get("current_price"),
-    )
+    _price = (data.get("tech_data") or {}).get("current_price")
+    _ml_5d = data.get("ml_prediction") or {}
+    _ml_1m = data.get("ml_prediction_1m") or {}
+    _regime_3m = data.get("regime_3m") or {}
+
+    if _ml_5d:
+        _pred_log.log(ticker=ticker, ml=_ml_5d, price=_price, horizon_days=5)
+    if _ml_1m:
+        _pred_log.log(ticker=ticker, ml=_ml_1m, price=_price, horizon_days=21)
+
+    # Normalize the 3-class regime dict into the existing log schema so
+    # all three horizons share one table. SIDEWAYS folds into NEUTRAL,
+    # which the existing hit logic already handles (|return| <= 2%).
+    if _regime_3m:
+        _regime = (_regime_3m.get("regime") or "").upper()
+        _direction = "NEUTRAL" if _regime == "SIDEWAYS" else (_regime or "NEUTRAL")
+        _probs = _regime_3m.get("probabilities") or {}
+        _ml_3m_synth = {
+            "direction": _direction,
+            "confidence": float(_regime_3m.get("confidence") or 0),
+            "scenario_probabilities": {
+                "bullish": float(_probs.get("BULLISH") or 0),
+                "neutral": float(_probs.get("SIDEWAYS") or 0),
+                "bearish": float(_probs.get("BEARISH") or 0),
+            },
+        }
+        _pred_log.log(ticker=ticker, ml=_ml_3m_synth, price=_price, horizon_days=63)
+
     _pred_log.resolve_pending()
 except Exception:
     # Logging failure should never block the UI.
