@@ -633,32 +633,84 @@ class UniversalStockAnalyzer:
             return self.analyze_sentiment()
     
     def get_earnings_calendar(self):
-        """Get earnings calendar information"""
+        """Get next earnings date.
+
+        yfinance changed ``ticker.calendar`` to return a ``dict`` in
+        recent versions (old versions returned a DataFrame). Handle
+        both, then fall back to ``ticker.earnings_dates`` (which lists
+        past + upcoming prints) when the calendar is empty.
+        """
+
+        def _to_naive_ts(value):
+            """Coerce any date-like input to a tz-naive pandas Timestamp."""
+            try:
+                ts = pd.Timestamp(value)
+            except Exception:
+                return None
+            if getattr(ts, "tz", None) is not None:
+                try:
+                    ts = ts.tz_convert("UTC").tz_localize(None)
+                except Exception:
+                    try:
+                        ts = ts.tz_localize(None)
+                    except Exception:
+                        return None
+            return ts
+
+        next_ts = None
         try:
-            # Get earnings data from yfinance
-            earnings = self.stock.calendar
-            if earnings is not None and not earnings.empty:
-                next_earnings = earnings.iloc[0] if len(earnings) > 0 else None
-                
-                if next_earnings is not None:
-                    earnings_date = next_earnings.name
-                    days_to_earnings = (earnings_date - pd.Timestamp.now()).days
-                    
-                    return {
-                        'next_earnings_date': earnings_date,
-                        'days_to_earnings': days_to_earnings,
-                        'earnings_expected': True,
-                        'volatility_expected': days_to_earnings <= 30  # High volatility expected within 30 days
-                    }
-        except Exception:
-            pass
-        
-        # Fallback: estimate based on quarterly pattern
+            calendar = self.stock.calendar
+
+            # New yfinance: dict. The earnings window may be a single
+            # date or a [start, end] pair — pick the earliest future one.
+            if isinstance(calendar, dict):
+                raw = calendar.get("Earnings Date") or []
+                if not isinstance(raw, (list, tuple)):
+                    raw = [raw]
+                today = pd.Timestamp.now().normalize()
+                for entry in raw:
+                    ts = _to_naive_ts(entry)
+                    if ts is not None and ts >= today and (
+                        next_ts is None or ts < next_ts
+                    ):
+                        next_ts = ts
+
+            # Old yfinance: DataFrame indexed by earnings date.
+            elif hasattr(calendar, "empty") and not calendar.empty:
+                try:
+                    next_ts = _to_naive_ts(calendar.iloc[0].name)
+                except Exception:
+                    next_ts = None
+        except Exception as e:
+            print(f"⚠️ earnings calendar (primary) error: {e}")
+
+        # Fallback: earnings_dates has a history including future prints.
+        if next_ts is None:
+            try:
+                edf = self.stock.earnings_dates
+                if edf is not None and not edf.empty:
+                    idx = edf.index
+                    now = pd.Timestamp.now(tz=idx.tz) if getattr(idx, "tz", None) else pd.Timestamp.now()
+                    future = idx[idx > now]
+                    if len(future):
+                        next_ts = _to_naive_ts(future.min())
+            except Exception as e:
+                print(f"⚠️ earnings_dates fallback error: {e}")
+
+        if next_ts is not None:
+            days_to = int((next_ts - pd.Timestamp.now().normalize()).days)
+            return {
+                "next_earnings_date": next_ts,
+                "days_to_earnings": days_to,
+                "earnings_expected": True,
+                "volatility_expected": days_to <= 30,
+            }
+
         return {
-            'next_earnings_date': None,
-            'days_to_earnings': None,
-            'earnings_expected': False,
-            'volatility_expected': False
+            "next_earnings_date": None,
+            "days_to_earnings": None,
+            "earnings_expected": False,
+            "volatility_expected": False,
         }
     
     def backtest_strategy(self, hist, lookback_days=252, prediction_horizon=5):
