@@ -376,15 +376,16 @@ def news_feed_block(articles: list, max_items: int = 20) -> None:
 
 
 def options_flow_block(flow: dict) -> None:
-    """Small panel summarizing near-term options activity."""
+    """Near-term options summary as a horizontal pill strip.
+
+    Dropping the 6-row kv layout in favor of pills saves ~100px of
+    column height without losing any of the aggregates.
+    """
     if not flow:
         return
 
     tilt = flow.get("tilt") or "—"
-    tilt_cls = {
-        "BULLISH": "up",
-        "BEARISH": "down",
-    }.get(tilt, "flat")
+    tilt_cls = {"BULLISH": "up", "BEARISH": "down"}.get(tilt, "flat")
 
     def _fmt_vol(v: Optional[float]) -> str:
         if v is None or v == 0:
@@ -403,17 +404,27 @@ def options_flow_block(flow: dict) -> None:
     atm_iv = flow.get("atm_iv")
     iv_str = f"{atm_iv*100:.1f}%" if atm_iv else "—"
 
-    kv_block(
-        "Options flow",
-        [
-            ("P/C Volume",   fmt_ratio(flow.get("put_call_vol_ratio"), 2)),
-            ("P/C Open Int", fmt_ratio(flow.get("put_call_oi_ratio"), 2)),
-            ("Call vol",     _fmt_vol(flow.get("call_volume"))),
-            ("Put vol",      _fmt_vol(flow.get("put_volume"))),
-            ("ATM IV",       iv_str),
-            ("Tilt",         f'<span class="{tilt_cls}">{tilt}</span>'),
-        ],
-        sub=f"expiry {expiry_label}",
+    pills = [
+        ("P/C VOL", fmt_ratio(flow.get("put_call_vol_ratio"), 2), ""),
+        ("P/C OI",  fmt_ratio(flow.get("put_call_oi_ratio"), 2), ""),
+        ("CALL",    _fmt_vol(flow.get("call_volume")), ""),
+        ("PUT",     _fmt_vol(flow.get("put_volume")), ""),
+        ("ATM IV",  iv_str, ""),
+        ("TILT",    tilt, tilt_cls),
+    ]
+    body = '<div class="of-pills">'
+    for lbl, val, cls in pills:
+        body += (
+            f'<span class="ps-pill {cls}">'
+            f'<span class="ps-lbl">{lbl}</span>'
+            f'<span class="ps-val">{val}</span></span>'
+        )
+    body += '</div>'
+
+    st.markdown(
+        panel_open("Options flow", f"expiry {expiry_label}")
+        + body + panel_close(),
+        unsafe_allow_html=True,
     )
 
 

@@ -332,6 +332,14 @@ DENSE_DARK_CSS = """
       letter-spacing: 0.02em;
   }
 
+  /* Options flow pills (panel body variant — wraps) */
+  .of-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 4px;
+  }
+
   /* Performance pills (embedded in panel header) */
   .ps-row {
       display: inline-flex;
