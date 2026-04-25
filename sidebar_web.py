@@ -36,7 +36,7 @@ def _import_stockiq_modules():
             institutional_holders_block, kv_block, news_feed_block,
             options_flow_block, panel_close, panel_open, performance_bars,
             performance_pills_html, probability_scenarios_combined,
-            regime_3m_block, unusual_options_block,
+            regime_3m_block, track_record_block, unusual_options_block,
         )
         from stockiq.ui.theme import inject_theme
         return locals()
@@ -519,6 +519,14 @@ with c_right:
 
     # News feed — per-article headlines + sentiment that fed the model.
     news_feed_block(sent.get("articles") or [], max_items=20)
+
+    # Prediction track record — backed by Supabase when configured (see
+    # migrations/001_predictions.sql). Falls back to the in-container
+    # parquet log otherwise. Empty until the first horizon resolves.
+    try:
+        track_record_block(_pred_log.summary())
+    except Exception as e:
+        st.caption(f"(track record unavailable: {e})")
 
 
 st.markdown(

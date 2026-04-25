@@ -1,9 +1,17 @@
 """Append-only log of model predictions so we can audit accuracy over time.
 
-Storage is a parquet file under ``data/predictions.parquet`` at the repo
-root. On Streamlit Cloud this persists across reruns within a single
-container lifetime but resets on redeploy — good enough for MVP; a
-database would be the follow-up.
+Two storage backends:
+
+1. **Supabase** (preferred). Activated when ``SUPABASE_URL`` and
+   ``SUPABASE_KEY`` are present in ``st.secrets``. Survives Streamlit
+   Cloud redeploys, so the Track Record panel shows real long-running
+   calibration. Run ``migrations/001_predictions.sql`` once in your
+   Supabase SQL editor to create the schema.
+
+2. **Parquet fallback** at ``data/predictions.parquet`` (repo root). On
+   Streamlit Cloud this persists across reruns within a single container
+   lifetime but resets on redeploy. Used when Supabase secrets are not
+   configured, so the dashboard keeps working out of the box.
 
 Every analyze() call appends one row. When the UI renders, we lazily
 resolve any old-enough predictions: fetch current price via yfinance
@@ -44,16 +52,56 @@ COLUMNS = [
 ]
 
 
+def _read_supabase_secrets() -> tuple[Optional[str], Optional[str]]:
+    """Pull SUPABASE_URL / SUPABASE_KEY from st.secrets if available.
+
+    Falls back to environment variables so tests and CLI runs can set
+    them outside Streamlit. Returns (None, None) if not configured —
+    the caller silently uses the parquet backend in that case.
+    """
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    if not (url and key):
+        try:
+            import streamlit as st
+            url = url or st.secrets.get("SUPABASE_URL")
+            key = key or st.secrets.get("SUPABASE_KEY")
+        except Exception:
+            pass
+    return (url or None), (key or None)
+
+
 class PredictionLog:
     def __init__(self, path: Optional[Path | str] = None,
                  horizon_days: int = 5) -> None:
-        self.path = Path(path) if path else _DEFAULT_PATH
         self.horizon_days = horizon_days
-        # Allow an env override so tests can point elsewhere.
+        self._sb_url, self._sb_key = _read_supabase_secrets()
+
+        # Parquet fallback path — only used when Supabase isn't configured.
+        self.path = Path(path) if path else _DEFAULT_PATH
         override = os.environ.get("STOCKIQ_PRED_LOG_PATH")
         if override:
             self.path = Path(override)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not self._using_supabase():
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _using_supabase(self) -> bool:
+        return bool(self._sb_url and self._sb_key)
+
+    # ------------------------------------------------------------------
+    # Supabase HTTP helpers
+    # ------------------------------------------------------------------
+
+    def _sb_headers(self, prefer: str = "return=representation") -> dict:
+        return {
+            "apikey": self._sb_key or "",
+            "Authorization": f"Bearer {self._sb_key or ''}",
+            "Content-Type": "application/json",
+            "Prefer": prefer,
+        }
+
+    def _sb_url_for(self, query: str = "") -> str:
+        return f"{self._sb_url}/rest/v1/predictions{query}"
 
     # ------------------------------------------------------------------
     # Read / write
@@ -79,14 +127,9 @@ class PredictionLog:
     # Public API
     # ------------------------------------------------------------------
 
-    def log(self, ticker: str, ml: dict, price: float) -> None:
-        """Record one prediction. Silently no-ops if ``ml`` is empty."""
-        if not ml or price is None:
-            return
+    def _build_row(self, ticker: str, ml: dict, price: float) -> dict:
         probs = ml.get("scenario_probabilities", {}) or {}
-        row = {
-            "id": uuid.uuid4().hex,
-            "timestamp": datetime.now(timezone.utc),
+        return {
             "ticker": ticker,
             "direction": (ml.get("direction") or "NEUTRAL").upper(),
             "confidence": float(ml.get("confidence") or 0),
@@ -96,17 +139,172 @@ class PredictionLog:
             "price_at_prediction": float(price),
             "price_target": float(ml.get("price_target") or 0) or None,
             "resolution_horizon_days": int(self.horizon_days),
+        }
+
+    def log(self, ticker: str, ml: dict, price: float) -> None:
+        """Record one prediction. Silently no-ops if ``ml`` is empty."""
+        if not ml or price is None:
+            return
+        if self._using_supabase():
+            self._log_supabase(ticker, ml, price)
+        else:
+            self._log_parquet(ticker, ml, price)
+
+    def resolve_pending(self, max_to_resolve: int = 50) -> int:
+        """Score any prediction older than horizon_days. Returns #resolved."""
+        if self._using_supabase():
+            return self._resolve_supabase(max_to_resolve)
+        return self._resolve_parquet(max_to_resolve)
+
+    def summary(self) -> dict[str, Any]:
+        """Overall counts + hit-rate + last N rows + calibration buckets."""
+        if self._using_supabase():
+            df = self._read_all_supabase()
+        else:
+            df = self._read()
+        return self._summarize_df(df)
+
+    # ------------------------------------------------------------------
+    # Supabase-backed implementations
+    # ------------------------------------------------------------------
+
+    def _log_supabase(self, ticker: str, ml: dict, price: float) -> None:
+        try:
+            import requests
+        except ImportError:
+            return
+        payload = self._build_row(ticker, ml, price)
+        # Supabase fills timestamp default + id; client doesn't send them.
+        try:
+            requests.post(
+                self._sb_url_for(),
+                headers=self._sb_headers(prefer="return=minimal"),
+                json=payload,
+                timeout=8,
+            )
+        except Exception:
+            pass
+
+    def _read_all_supabase(self) -> pd.DataFrame:
+        try:
+            import requests
+        except ImportError:
+            return pd.DataFrame(columns=COLUMNS)
+        try:
+            r = requests.get(
+                self._sb_url_for("?select=*&order=timestamp.desc&limit=2000"),
+                headers=self._sb_headers(),
+                timeout=8,
+            )
+            if r.status_code != 200:
+                return pd.DataFrame(columns=COLUMNS)
+            rows = r.json() or []
+            if not rows:
+                return pd.DataFrame(columns=COLUMNS)
+            df = pd.DataFrame(rows)
+            # Backfill any missing schema columns the migration didn't add
+            for col in COLUMNS:
+                if col not in df.columns:
+                    df[col] = pd.NA
+            return df
+        except Exception:
+            return pd.DataFrame(columns=COLUMNS)
+
+    def _resolve_supabase(self, max_to_resolve: int) -> int:
+        try:
+            import requests
+        except ImportError:
+            return 0
+        try:
+            cutoff = (datetime.now(timezone.utc)
+                      - timedelta(days=self.horizon_days)).isoformat()
+            params = (
+                f"?select=*&hit=is.null&timestamp=lte.{cutoff}"
+                f"&order=timestamp.asc&limit={max_to_resolve}"
+            )
+            r = requests.get(
+                self._sb_url_for(params),
+                headers=self._sb_headers(),
+                timeout=8,
+            )
+            if r.status_code != 200:
+                return 0
+            pending = r.json() or []
+            if not pending:
+                return 0
+        except Exception:
+            return 0
+
+        try:
+            import yfinance as yf
+        except ImportError:
+            return 0
+
+        # Group by ticker so we hit yfinance once per ticker.
+        by_ticker: dict[str, list[dict]] = {}
+        for row in pending:
+            by_ticker.setdefault(row["ticker"], []).append(row)
+
+        resolved = 0
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for tkr, rows in by_ticker.items():
+            try:
+                hist = yf.Ticker(tkr).history(period="1mo")
+                if hist.empty:
+                    continue
+                now_price = float(hist["Close"].iloc[-1])
+            except Exception:
+                continue
+
+            for row in rows:
+                p0 = row.get("price_at_prediction")
+                if not p0:
+                    continue
+                ret = (now_price / float(p0)) - 1
+                direction = (row.get("direction") or "").upper()
+                if direction == "BULLISH":
+                    hit = ret > 0
+                elif direction == "BEARISH":
+                    hit = ret < 0
+                else:
+                    hit = abs(ret) <= 0.02
+                update_payload = {
+                    "resolved_at": now_iso,
+                    "price_at_resolution": now_price,
+                    "actual_return": float(ret),
+                    "hit": bool(hit),
+                }
+                try:
+                    requests.patch(
+                        self._sb_url_for(f"?id=eq.{row['id']}"),
+                        headers=self._sb_headers(prefer="return=minimal"),
+                        json=update_payload,
+                        timeout=8,
+                    )
+                    resolved += 1
+                except Exception:
+                    continue
+        return resolved
+
+    # ------------------------------------------------------------------
+    # Parquet-backed implementations (fallback when Supabase isn't set up)
+    # ------------------------------------------------------------------
+
+    def _log_parquet(self, ticker: str, ml: dict, price: float) -> None:
+        row = self._build_row(ticker, ml, price)
+        row.update({
+            "id": uuid.uuid4().hex,
+            "timestamp": datetime.now(timezone.utc),
             "resolved_at": pd.NaT,
             "price_at_resolution": None,
             "actual_return": None,
             "hit": None,
-        }
+        })
         df = self._read()
         df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
         self._write(df)
 
-    def resolve_pending(self, max_to_resolve: int = 50) -> int:
-        """Score any prediction older than horizon_days. Returns #resolved."""
+    def _resolve_parquet(self, max_to_resolve: int) -> int:
         df = self._read()
         if df.empty:
             return 0
@@ -159,23 +357,33 @@ class PredictionLog:
         self._write(df)
         return len(pending_idx)
 
-    def summary(self) -> dict[str, Any]:
-        """Overall counts + hit-rate + last N rows."""
-        df = self._read()
+    # ------------------------------------------------------------------
+    # Shared aggregator (works on either backend's DataFrame)
+    # ------------------------------------------------------------------
+
+    def _summarize_df(self, df: pd.DataFrame) -> dict[str, Any]:
+        """Overall counts + hit-rate + last N rows + calibration."""
+        if df.empty:
+            return {
+                "total": 0, "resolved": 0, "pending": 0, "hits": 0,
+                "hit_rate": None, "recent": [], "calibration": [],
+            }
+        # Coerce hit -> nullable bool: Supabase returns true/false/None,
+        # parquet returns Python bool/None. Both round-trip via pandas
+        # but the Supabase JSON parse leaves "hit" as bool/None.
         total = len(df)
-        resolved_df = df[df["hit"].notna()]
+        resolved_df = df[df["hit"].notna()] if "hit" in df.columns else df.iloc[0:0]
         resolved = len(resolved_df)
         hits = int(resolved_df["hit"].sum()) if resolved else 0
         hit_rate = (hits / resolved) if resolved else None
         pending = total - resolved
 
-        # Recent predictions for the UI (newest first)
         if total:
             recent = df.sort_values("timestamp", ascending=False).head(8).to_dict("records")
         else:
             recent = []
 
-        # Calibration by confidence bucket (only when we have enough signal)
+        # Calibration by confidence bucket (only with enough samples)
         calibration = []
         if resolved >= 5:
             bins = [(0.33, 0.50), (0.50, 0.65), (0.65, 0.80), (0.80, 1.01)]
