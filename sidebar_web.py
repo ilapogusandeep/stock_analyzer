@@ -304,6 +304,14 @@ with c_left:
     # Options flow — put/call ratios + ATM IV from nearest expiry
     options_flow_block(options_flow)
 
+    # Earnings history — fundamental data, fits with Valuation/Health
+    # rather than the AI-prediction column on the right.
+    earnings_hist = (
+        (inst.get("earnings_data") or {}).get("history", [])
+        if isinstance(inst, dict) else []
+    )
+    earnings_history_block(earnings_hist)
+
 
 # ---- Middle column: price chart + technicals + performance -----------------
 
@@ -469,6 +477,11 @@ with c_mid:
         )
         institutional_holders_block(top_holders, max_items=8)
 
+        # Unusual options — same "smart money positioning" theme as the
+        # 13F holders above, and fills the height mid_r was short vs
+        # mid_l (Technical + Analyst & sentiment).
+        unusual_options_block(unusual_opts)
+
 
 # ---- Right column: AI predictions + backtest --------------------------------
 
@@ -579,16 +592,6 @@ with c_right:
         except Exception:
             # Older cached components.py won't have this function. Skip.
             pass
-
-    # Earnings history (from yfinance via institutional_data)
-    earnings_hist = (
-        (inst.get("earnings_data") or {}).get("history", [])
-        if isinstance(inst, dict) else []
-    )
-    earnings_history_block(earnings_hist)
-
-    # Unusual options — top strikes with volume >> open interest
-    unusual_options_block(unusual_opts)
 
     # News feed — per-article headlines + sentiment that fed the model.
     news_feed_block(sent.get("articles") or [], max_items=20)
