@@ -88,6 +88,34 @@ DENSE_DARK_CSS = """
   .topbar [data-testid="stCheckbox"] { margin-top: 20px; }
   .topbar [data-testid="stCheckbox"] label > div:last-child { color: #cbd5e1 !important; }
 
+  /* ===== Secondary buttons (Recent searches pills) =====
+     Style every kind="secondary" Streamlit button to look like the
+     ps-pill chips used elsewhere. Primary buttons (the Analyze CTA)
+     are unaffected because they're matched by [kind="primary"].   */
+  [data-testid="stButton"] > button[kind="secondary"] {
+      background: rgba(148,163,255,0.06) !important;
+      border: 1px solid rgba(148,163,255,0.20) !important;
+      border-radius: 12px !important;
+      padding: 4px 12px !important;
+      color: #e6ebff !important;
+      font-weight: 700 !important;
+      font-size: 0.78rem !important;
+      letter-spacing: 0.04em !important;
+      font-variant-numeric: tabular-nums;
+      transition: all 0.12s ease;
+      min-height: 28px !important;
+      height: auto !important;
+  }
+  [data-testid="stButton"] > button[kind="secondary"]:hover {
+      background: rgba(34,197,94,0.16) !important;
+      border-color: rgba(34,197,94,0.55) !important;
+      color: #4ade80 !important;
+      transform: translateY(-1px);
+  }
+  [data-testid="stButton"] > button[kind="secondary"]:active {
+      transform: translateY(0);
+  }
+
   /* ===== Header band ===== */
   .hb {
       display: grid;
