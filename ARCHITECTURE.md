@@ -13,6 +13,7 @@ flowchart LR
     classDef core fill:#3b0764,stroke:#a855f7,color:#e9d5ff
     classDef data fill:#064e3b,stroke:#10b981,color:#d1fae5
     classDef store fill:#422006,stroke:#f59e0b,color:#fef3c7
+    classDef passthrough fill:#0f172a,stroke:#334155,color:#94a3b8,stroke-dasharray:3 3
 
     User((User browser)):::ui
     Streamlit[Streamlit Cloud<br/>sidebar_web.py]:::ui
@@ -29,11 +30,16 @@ flowchart LR
     Components[UI components<br/>stockiq.ui.components]:::ui
     Theme[Dark theme CSS<br/>stockiq.ui.theme]:::ui
 
-    YF[yfinance<br/>prices · info · options · news · 13F]:::external
-    RSS[Google News RSS<br/>+ Yahoo RSS]:::external
+    YFPrices[yfinance core<br/>prices · info · options · 13F · earnings]:::external
+    YFNews[yfinance.ticker.news<br/>aggregator]:::external
+    GNews[Google News RSS<br/>aggregator]:::external
+    YahooRSS[Yahoo Finance RSS<br/>aggregator]:::external
+    MWRSS[MarketWatch RSS<br/>aggregator]:::external
     SectorETF[Sector SPDRs<br/>XLK/XLF/XLV/...]:::external
     Supabase[(Supabase<br/>predictions table)]:::store
     Parquet[(data/predictions.parquet<br/>local fallback)]:::store
+
+    Publishers[Publisher labels passed through:<br/>Motley Fool · Benzinga · IBD · MarketBeat<br/>Seeking Alpha · CNBC · Reuters · Zacks<br/>Barron's · Business Insider · MSN · TIKR<br/>StockStory · TradingKey · ...]:::passthrough
 
     User -->|HTTPS| Streamlit
     Streamlit --> Analyzer
@@ -47,21 +53,29 @@ flowchart LR
     Analyzer --> ML
     Analyzer -->|sector lookup| SectorETF
 
-    Collector --> YF
-    Collector --> RSS
-    Inst --> YF
-    Options --> YF
+    Collector --> YFNews
+    Collector --> GNews
+    Collector --> YahooRSS
+    Collector --> MWRSS
+    Inst --> YFPrices
+    Options --> YFPrices
+
+    YFNews -.->|publisher displayName| Publishers
+    GNews -.->|<source> tag per item| Publishers
+    YahooRSS -.->|item title| Publishers
+    MWRSS -.->|item title| Publishers
+    Publishers -.->|labels rendered in News Feed| Components
 
     ML --> Analyzer
 
     PredLog -.->|if SUPABASE_URL set| Supabase
     PredLog -.->|fallback| Parquet
-    PredLog -->|resolve prices| YF
+    PredLog -->|resolve prices| YFPrices
 
     Components --> User
 ```
 
-Legend: green = data layer, purple = core logic, blue = UI, orange = storage, slate = external.
+Legend: green = data layer, purple = core logic, blue = UI, orange = storage, slate = external services we **call directly**, dashed grey = publisher names that appear in the News Feed but are **passed through** the aggregators above (we never make HTTP calls to those outlets directly).
 
 ---
 
@@ -202,15 +216,39 @@ UI functions are also written defensively against signature mismatches: e.g., `p
 
 ## External services
 
+### Endpoints we call directly
+
 | Service | Purpose | Cost | Rate limit | Failure mode |
 |---|---|---|---|---|
-| yfinance | Prices, info, options, news, holders, earnings | Free | Unofficial — has scraped Yahoo Finance since ~2017, occasionally rate-limits | Silent retry, then empty result |
-| Google News RSS | Headlines + publisher names | Free | None officially, practically loose | Timeout → skip source |
-| Yahoo Finance RSS | Supplemental headlines | Free | Same | Timeout → skip |
-| Sector SPDR ETFs | Peer relative strength (XLK etc.) | Free (via yfinance) | Inherited | Feature defaults to 0 |
+| **yfinance core** | Prices, info, options chains, holders (13F), earnings calendar, sector lookup | Free | Unofficial — scrapes Yahoo Finance since ~2017, occasionally rate-limits | Silent retry, then empty result |
+| **yfinance.ticker.news** (aggregator) | Curated news with real publisher display names | Free | Same as above | Skip news source |
+| **Google News RSS** (aggregator) | `news.google.com/rss/search?q={ticker}+stock`. Each `<item>` carries a `<source>` tag with the real outlet name | Free | None officially, practically loose | Timeout → skip source |
+| **Yahoo Finance RSS** (aggregator) | `feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}` | Free | Same | Timeout → skip |
+| **MarketWatch RSS** (aggregator) | Per-ticker headline feed | Free | Same | Timeout → skip |
+| Sector SPDR ETFs | Peer relative strength (XLK / XLF / XLV / XLY / XLP / XLI / XLE / XLC / XLU / XLRE / XLB) — fetched via yfinance | Free (via yfinance) | Inherited | Feature defaults to 0 |
 | Supabase | Persistent prediction log | Free tier (500MB DB) | 50K monthly active users | Parquet fallback |
 
-No paid APIs are required. The app has deliberately avoided Polygon / Unusual Whales / Benzinga Pro / Seeking Alpha Pro so it stays free for personal use. Adding any of them would be ~50 LOC of REST glue.
+### Publishers shown in the News Feed (passed through, not directly fetched)
+
+The publisher labels you see on each headline (Motley Fool, Benzinga, MarketBeat, Seeking Alpha, IBD, CNBC, Reuters, Barron's, Business Insider, Zacks, MSN, TIKR, StockStory, TradingKey, ...) are **propagated through** the aggregators above. We never make an HTTP request to `benzinga.com` or `fool.com` directly.
+
+Where each label comes from:
+- **`yfinance.ticker.news`** returns articles from Yahoo's curated network — Motley Fool, IBD, Reuters, Barron's, Business Insider, Bloomberg, Zacks — with `provider.displayName` populated.
+- **Google News RSS** carries CNBC, MarketBeat, MSN, TIKR.com, StockStory, TradingKey, Seeking Alpha (when not paywalled), Benzinga (free articles), and many smaller outlets — extracted from the `<source>` tag in each `<item>`.
+- **MarketWatch / Yahoo Finance RSS** are MarketWatch- and Yahoo-branded headline feeds; titles surface as-is.
+
+After all sources are fetched, the aggregator de-duplicates by lowercased title prefix and keeps the freshest copy of any headline that appears via multiple aggregators (so a Reuters story from yfinance + the same story from Google News appears once).
+
+### Why we don't hit publishers directly
+
+Most premium outlets (Seeking Alpha Pro, Benzinga Pro, Barron's, Bloomberg, WSJ, FT) are paywalled — there's no free per-ticker RSS for them anymore. Free outlets (CNBC, MarketWatch, MarketBeat, Motley Fool) generally don't expose per-ticker feeds either; they syndicate to aggregators and let downstream consumers (Yahoo, Google News) handle distribution. Adding a direct paid integration would be ~50 LOC of REST glue per service:
+
+| Service | Cost | What it adds |
+|---|---|---|
+| Polygon.io | $29/mo | Real options time-and-sales (proper buy/sell attribution) |
+| Unusual Whales | $48–98/mo | Curated UOA + Congress trades + dark pool prints |
+| Benzinga Pro | $99+/mo | Real-time press releases + analyst notes feed |
+| Tradier | $10/mo | Real-time options chains + Greeks |
 
 ---
 
