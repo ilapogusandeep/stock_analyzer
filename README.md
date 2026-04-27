@@ -1,305 +1,154 @@
-# 🏆 Universal Stock Analyzer
+# StockIQ
 
-**Professional-grade stock analysis system with AI-powered predictions, comprehensive technical analysis, and interactive web interface**
+A single-page stock analysis dashboard. Pulls free public data (yfinance, RSS news, 13F filings, options chains), runs multi-horizon ML forecasts, and renders everything on one screen — no tabs, no page turns.
 
-## 🚀 **Quick Start**
+Live: **[stockiq.streamlit.app](https://stockiq.streamlit.app)** · Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) · Tests: [tests/README.md](tests/README.md)
 
-### **Command Line Analysis**
+---
+
+## What's on the page
+
+Every analysis renders four vertical columns over a single compact header band.
+
+### Header band
+
+- Ticker + company name + **one-liner**: `Industry · HQ City, State · N employees · Business summary`
+- Live price + day change
+- **Model signal** pill: BULLISH / NEUTRAL / BEARISH (1-week horizon)
+- Market cap · sector · price target · **next earnings** date + countdown
+- 7 external research links (Yahoo Finance, Finviz, TradingView, Stock Analysis, SEC Filings, Google News, Seeking Alpha, Website)
+
+### Column 1 — Fundamentals
+
+| Panel | What it shows |
+|---|---|
+| **Valuation** | P/E · Fwd P/E · PEG · P/B · P/S · Beta |
+| **Health & Range** | Current Ratio · D/E · ROE · Margin · Rev Growth · 52w High/Low/From High/From Low |
+| **Positioning** | Short % Float · Days to Cover · Short MoM Δ · Insider Own · Institutional Own |
+| **Technical** | RSI (14) · MACD · SMA 20/50/200 · Volatility 20d |
+| **Options Flow** | Horizontal pill strip: P/C Vol · P/C OI · Call/Put volume · ATM IV · Tilt |
+
+### Column 2 — Chart + market view
+
+- **Price/Volume/RSI chart** (1Y, shared x-axis) with SMA 20/50/200 + Bollinger bands overlay
+- **Performance pills** (1D/5D/1M/3M/1Y returns) embedded in the chart header
+- **Analyst & Sentiment** panel combining analyst consensus (rating, target mean, implied upside) with multi-source sentiment (overall + news score)
+
+### Column 3 — Smart money
+
+| Panel | What it shows |
+|---|---|
+| **Top Holders** | Latest 13F filings — top 8 institutions by value, with % held and quarterly position change, sorted by filing date |
+| **Unusual Options** | Strikes where today's V/OI ≥ 2× across the next 3 expiries, ranked by dollar premium flow. Each row shows: direction · strike · expiry · V/OI ratio · premium · **aggressor tag** (B/S/M from bid-ask heuristic) · 🔗 cluster flag |
+| **Earnings History** | Last 4 quarters — estimate, actual, surprise % |
+
+### Column 4 — AI forecasts + news
+
+- **AI · 1 week** — bullish/neutral/bearish probability bars + target prices + accuracy readout
+- **AI · 1 month** — same structure, 21-day horizon
+- **AI · 3 month regime** — 3-class classifier (BULLISH / SIDEWAYS / BEARISH) with probability mix, since a point price target on a single ticker at 3 months is basically noise
+- **News feed** — up to 20 headlines sorted latest-first, with real publisher labels (Motley Fool, Benzinga, MarketBeat, Seeking Alpha, IBD, CNBC, Reuters, ...), recency-weighted sentiment scores, scrollable inline
+
+---
+
+## What makes this different from a Yahoo Finance page
+
+### Honest walk-forward accuracy
+
+Every forecast panel shows its test accuracy from a **chronological** 80/20 split — first 80% of history trains, last 20% tests. No random shuffling, no lookahead leakage. When you see `accuracy 53%` it's what the model *would have* scored on the most recent slice of real history.
+
+### Live calibration feedback loop
+
+Predictions land in a Supabase table (`predictions`) with `hit = NULL`. Once the resolution horizon (5d / 21d / 63d) passes, the next analysis call fetches the actual price, compares to the prediction, and updates `hit`. Once you have ≥ 5 resolved predictions per horizon, the UI **shrinks displayed confidence** toward the no-edge baseline by a factor scaled to the model's demonstrated edge:
+
+- 75% hit rate → halfway shrinkage (the model gets roughly what it "earned")
+- 50% hit rate → full shrinkage to uniform (UI says "we don't know")
+- Below 50% → also shrinks (noise, not necessarily inverted signal)
+
+Subtitle of each panel shows `calibrated · n=N` or `untracked · n=N` so you always know which mode it's in.
+
+### Aggressor-inferred options direction (free-tier)
+
+yfinance only gives end-of-day options snapshots — no real trade-by-trade bid/ask side. We infer aggressor by checking where `lastPrice` sits in the bid/ask spread:
+
+- Top third of spread → **BUY** (buyer hit the ask)
+- Bottom third → **SELL** (seller hit the bid)
+- Middle → **MID** (inconclusive)
+
+Not as sharp as Polygon's $29/mo time-and-sales, but significantly better than pure V/OI, and free.
+
+### Real publisher names instead of "Google News" blob
+
+We parse the `<source>` tag from every Google News RSS item and cross-fetch yfinance's native `ticker.news` (which returns publisher display names). Result: headlines labeled with the real outlet — Motley Fool, Benzinga, MarketBeat, Barron's (when cross-fed by another aggregator), IBD, Seeking Alpha, etc. — and source diversity becomes an ML feature (`news_source_count`).
+
+---
+
+## ML features feeding the forecasts
+
+- **Price/technical**: returns (1d/5d/20d), RSI, MACD, Bollinger bands, SMA 5/20/50, volume ratio, 20d volatility
+- **News**: overall sentiment, news count, positive ratio, confidence, **source diversity count**, **recency-weighted sentiment** (2-day half-life)
+- **Social**: social sentiment score, mentions, engagement rate
+- **Analyst**: rating mean, target mean, opinion count
+- **Options**: P/C ratio, options sentiment label
+- **Institutional**: ownership %, institution count, **13F net flow** (value-weighted pct_change across top holders)
+- **Peer/sector relative strength**: rolling 1m and 3m relative return vs sector ETF (XLK/XLF/XLV/XLY/XLP/XLI/XLE/XLC/XLU/XLRE/XLB)
+- **Earnings proximity**: days to next earnings (capped at 60), `earnings_imminent` (≤ 14 days)
+- **Economic**: VIX, treasury yield, dollar index
+- **Rankings**: Finviz ratios, MarketWatch ratings, Yahoo analyst stats, sector performance
+
+~35 features in total feed an ensemble of RandomForest (60%) + GradientBoosting (40%).
+
+---
+
+## Setup
+
+### Run locally
+
 ```bash
-./analyze AAPL
-./analyze TSLA
-./analyze NVDA
-```
-
-### **Web Interface**
-```bash
-./analyze --web
-```
-Then open browser to `http://localhost:8501`
-
-## 📊 **What You Get**
-
-### **🤖 AI-Powered Predictions**
-- **Multi-Model Ensemble**: RandomForest + GradientBoosting + XGBoost
-- **Probability Predictions**: "70% probability of +5-10% in 1 month"
-- **Confidence Intervals**: Probability bands instead of hard BUY/SELL
-- **SHAP Explanations**: Explainable AI with feature importance
-- **Scenario Analysis**: Bullish, Neutral, Bearish probabilities
-- **Model Performance**: Accuracy metrics for each model
-
-### **💰 Comprehensive Fundamental Analysis**
-- **Valuation Ratios**: P/E, Forward P/E, PEG, Price-to-Book, Price-to-Sales
-- **Growth Metrics**: Revenue growth, earnings growth, ROE, profit margins
-- **Risk Metrics**: Beta, debt-to-equity, current ratio, quick ratio
-- **Analyst Data**: Target price, recommendation consensus
-- **Market Metrics**: Market cap, enterprise value, 52-week high/low
-
-### **😊 Enhanced Sentiment Analysis**
-- **Multi-Source Sentiment**: News + social media + analyst ratings
-- **Weighted Analysis**: Impact-weighted sentiment scoring
-- **News Sources**: Yahoo Finance, MarketWatch, Bloomberg, CNBC, Benzinga
-- **Social Media**: Twitter, Reddit, StockTwits integration
-- **Confidence Scoring**: Sentiment confidence levels
-
-### **📈 Advanced Technical Analysis**
-- **20+ Technical Indicators**: RSI, MACD, Stochastic, Williams %R, ATR, OBV
-- **Multiple Timeframes**: 5, 10, 20, 50, 200-day averages
-- **Volume Analysis**: Volume ratios, institutional flow indicators
-- **Volatility Metrics**: Annual volatility, ATR, Bollinger Band position
-- **Performance Metrics**: 1D, 5D, 1M, 3M, 1Y returns
-
-### **🎯 Professional Recommendation Engine**
-- **Comprehensive Scoring**: Technical + Fundamental + Sentiment + ML (7 factors)
-- **Risk Assessment**: Multiple risk factors identification
-- **Confidence Levels**: HIGH/MEDIUM/LOW with detailed reasoning
-- **Investment Recommendation**: STRONG BUY, BUY, HOLD, SELL
-
-### **📊 Interactive Web Interface**
-- **Collapsible Sections**: Organized, space-efficient layout
-- **Interactive Charts**: Plotly-powered technical analysis
-- **Real-time Data**: Live market data updates
-- **Professional Styling**: Clean, modern interface
-- **Responsive Design**: Works on all devices
-
-## 🎯 **Usage Examples**
-
-### **Command Line**
-```bash
-# Basic analysis
-./analyze AAPL
-
-# Analysis without ML predictions
-./analyze TSLA --no-ml
-
-# Analysis without fundamentals
-./analyze NVDA --no-fundamentals
-
-# Analysis without sentiment
-./analyze MSFT --no-sentiment
-```
-
-### **Web Interface**
-```bash
-# Launch web interface
-./analyze --web
-# or
-./analyze web
-```
-
-## 📊 **Sample Output**
-
-### **Command Line Output**
-```
-🏆 STOCK ANALYSIS: AAPL
-==================================================
-
-📊 BASIC INFORMATION
-Current Price: $236.70
-Price Change: +1.12%
-Volume: 42,522,506
-Market Cap: $3,512,722,522,112
-Company: Apple Inc.
-Sector: Technology
-Industry: Consumer Electronics
-
-🔧 TECHNICAL ANALYSIS
-RSI (14): 61.6
-MACD: 3.684
-SMA 20: $231.96
-SMA 50: $221.47
-Volatility: 1.5%
-BB Position: 65.2%
-
-📈 PERFORMANCE
-1 Day: +1.1%
-5 Days: +2.3%
-1 Month: +5.7%
-3 Months: +12.4%
-1 Year: +28.9%
-
-💰 FUNDAMENTAL ANALYSIS
-P/E Ratio: 35.86
-Forward P/E: 28.45
-PEG Ratio: 2.15
-Price-to-Book: 45.23
-Revenue Growth: 8.5%
-ROE: 147.8%
-Beta: 1.25
-Relative Strength: +5.2%
-
-😊 SENTIMENT ANALYSIS
-Overall Sentiment: POSITIVE
-Sentiment Score: +0.650
-News Sentiment: +0.650
-Social Sentiment: +0.300
-News Count: 5
-Positive Ratio: 80.0%
-
-🤖 ML PREDICTION
-Direction: BULLISH
-Confidence: 65.3%
-Probability Up: 65.3%
-Probability Down: 34.7%
-Price Target: $245.67
-
-🎯 MODEL PERFORMANCE
-RandomForest: 0.623
-GradientBoosting: 0.618
-XGBoost: 0.631
-
-🔍 TOP FEATURES
-• returns_3d: 0.089
-• macd_histogram: 0.088
-• ma5: 0.082
-• price_ma50_ratio: 0.081
-• macd: 0.076
-
-🎯 RECOMMENDATION
-Recommendation: STRONG BUY
-Confidence: HIGH
-Score: 5/7
-
-🔍 KEY FACTORS
-✅ RSI not overbought
-✅ MACD bullish
-✅ Above 20-day SMA
-✅ Reasonable P/E ratio
-✅ Outperforming market
-
-⚠️ RISK ASSESSMENT
-✅ Low risk factors identified
-```
-
-## 🏆 **Competitive Comparison**
-
-| Feature | Our System | Bloomberg | Yahoo Finance | TradingView |
-|---------|------------|-----------|---------------|-------------|
-| **ML Predictions** | ✅ Multi-model ensemble | ✅ | ✅ | ✅ |
-| **Probability Analysis** | ✅ | ✅ | ✅ | ✅ |
-| **Fundamental Analysis** | ✅ Comprehensive | ✅ | ✅ | ❌ |
-| **Sentiment Analysis** | ✅ Multi-source | ✅ | ✅ | ✅ |
-| **Feature Importance** | ✅ SHAP | ✅ | ❌ | ❌ |
-| **Model Performance** | ✅ | ✅ | ❌ | ❌ |
-| **Command Line** | ✅ | ❌ | ❌ | ❌ |
-| **Web Interface** | ✅ | ✅ | ✅ | ✅ |
-| **Cost** | 🆓 Free | 💰 $2,000/mo | 💰 $35/mo | 💰 $15/mo |
-
-## 🔧 **Installation**
-
-### **Dependencies**
-```bash
+git clone https://github.com/ilapogusandeep/stock_analyzer.git
+cd stock_analyzer
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+streamlit run sidebar_web.py
 ```
 
-### **Required Packages**
-- `streamlit` - Web interface
-- `yfinance` - Market data
-- `pandas` - Data manipulation
-- `numpy` - Numerical computing
-- `plotly` - Interactive charts
-- `scikit-learn` - Machine learning
-- `xgboost` - Advanced ML (optional)
-- `requests` - Web requests
-- `beautifulsoup4` - Web scraping
-- `textblob` - Sentiment analysis
-- `vaderSentiment` - Advanced sentiment
-- `shap` - Explainable AI
+No API keys required for basic operation — yfinance + free RSS is enough. The dashboard runs with a local parquet prediction log at `data/predictions.parquet`.
 
-## 📁 **File Structure**
+### Enable persistent prediction storage (recommended)
 
-```
-stock_analyzer/
-├── stock_analyzer.py              # 🏆 Universal analyzer (CLI + Web)
-├── sidebar_web.py                 # 🌐 Enhanced web interface
-├── enhanced_data_collector.py     # 📊 Multi-source data collection
-├── analyze                        # 🚀 Universal launcher
-├── requirements.txt               # 📦 Dependencies
-├── README.md                      # 📚 This file
-└── portfolio.json                 # 💼 Portfolio data (auto-created)
-```
+1. Sign up at [supabase.com](https://supabase.com) (free tier is plenty)
+2. Run [`migrations/001_predictions.sql`](migrations/001_predictions.sql) in Supabase SQL Editor
+3. Grab your Project URL + publishable/anon key from Project Settings → API
+4. Add to `.streamlit/secrets.toml` (or Streamlit Cloud app secrets):
 
-## 🎯 **Key Features**
+   ```toml
+   SUPABASE_URL = "https://your-project.supabase.co"
+   SUPABASE_KEY = "sb_publishable_..."
+   ```
 
-### **✅ What Makes This Universal**
-- **Single File**: One file works for both CLI and web
-- **AI-Powered**: Multi-model ensemble with probability predictions
-- **Comprehensive**: Technical + Fundamental + Sentiment analysis
-- **Professional**: Commercial-grade UI with interactive charts
-- **Explainable**: SHAP feature importance and model performance
-- **Risk-Aware**: Multi-factor risk assessment
-- **Free**: No subscription fees required
+Without Supabase the app works fine but the Track Record resets on every redeploy (parquet is on ephemeral FS).
 
-### **🚀 Advanced Capabilities**
-- **Real-time Data**: Live market data from Yahoo Finance
-- **Interactive Charts**: Plotly-powered technical analysis (web only)
-- **Professional Metrics**: All standard financial ratios
-- **Responsive Design**: Works on desktop and mobile (web only)
-- **Color Coding**: Intuitive positive/negative indicators
-- **Collapsible UI**: Space-efficient, organized interface
-
-## 🎯 **Command Line Options**
+### Run tests
 
 ```bash
-./analyze TICKER [OPTIONS]
-
-Options:
-  --no-ml           Disable ML predictions
-  --no-fundamentals  Disable fundamental analysis
-  --no-sentiment    Disable sentiment analysis
-  --web             Launch web interface
+pip install -r requirements.txt pytest
+pytest tests/
 ```
 
-## 🌐 **Web Interface Features**
+See [tests/README.md](tests/README.md) for what's covered and how to add new tests.
 
-- **Collapsible Sections**: Organized, space-efficient layout
-- **Interactive Charts**: Candlestick charts with technical overlays
-- **Company Overview**: Combined company info, key metrics, and price chart
-- **ML Predictions**: Probability visualization with SHAP explanations
-- **Professional Styling**: Clean, modern interface
-- **Responsive Design**: Works on all devices
-- **Fast Mode**: Skip ML/backtest for quicker analysis
+---
 
-## 📊 **Data Sources**
+## Honest limitations
 
-### **Primary Sources**
-- 📈 Yahoo Finance (Market Data)
-- 📰 News APIs (Yahoo Finance, MarketWatch, Bloomberg, CNBC, Benzinga)
-- 🐦 Social Media (Twitter, Reddit, StockTwits)
-- 👔 Analyst Ratings (Yahoo Finance)
+- **Single-ticker ML**, 1 year of daily history ≈ 252 samples. Don't expect edge at 3m horizon — that's why 3m is a regime classifier, not a price target. 1w realistically tops out around 55–60% on liquid names; 1m around 52–55%.
+- **Options aggressor is an end-of-day heuristic**, not real trade prints. Expect ~55–65% directional accuracy on liquid strikes. For real buy/sell attribution use Polygon.io ($29/mo) or Unusual Whales ($48+/mo).
+- **Calibration needs ≥ 5 resolved predictions per horizon** to kick in. First useful 1w data lands ~5 trading days after your first analysis run (and that's per-horizon, so 3m won't have a real calibration signal for ~3 months).
+- **No real-time data**. yfinance is 15-minute delayed and end-of-day accurate for most fields. Not suitable for intraday trading.
+- **Paywalled sources we don't directly hit**: Seeking Alpha Pro, Benzinga Pro, Barron's, Bloomberg, WSJ. We do surface their public headlines via aggregators.
 
-### **Additional Sources**
-- 📊 Options Flow Data
-- 🏛️ Institutional Holdings
-- 🌍 Economic Indicators (VIX, Treasury Yields, Dollar Index)
-- 🔍 Alternative Data (Google Trends, Web Traffic)
+---
 
-## ⚠️ **Disclaimer**
+## Not investment advice
 
-This analysis is for educational purposes only. Always consult with qualified financial advisors before investing. Past performance does not guarantee future results.
-
-## 🏆 **Conclusion**
-
-This is a **professional-grade stock analysis system** that rivals commercial platforms like Bloomberg Terminal, Yahoo Finance Pro, and TradingView - but it's completely free!
-
-**Single file, dual interface, professional results! 🚀📈**
-
-### **Quick Commands**
-```bash
-# Command line analysis
-./analyze AAPL
-
-# Web interface
-./analyze --web
-```
-
-**Ready to analyze stocks like a pro! 🏆**
-
-## 🔄 **Recent Updates**
-
-- ✅ **Collapsible UI**: Space-efficient, organized interface
-- ✅ **Enhanced Layout**: Company overview with horizontal key metrics
-- ✅ **SHAP Explanations**: Explainable AI with feature importance
-- ✅ **Multi-Source Data**: Enhanced data collection from multiple sources
-- ✅ **Professional Styling**: Clean, modern interface
-- ✅ **Fast Mode**: Quick analysis without ML/backtest
-- ✅ **Comprehensive Analysis**: Technical + Fundamental + Sentiment + ML
+Everything. This is a research tool — a compact dashboard over free public data with some machine learning on top. The calibration panel makes it honest about how often the model has been right, not authoritative about what happens next. Make your own decisions.
