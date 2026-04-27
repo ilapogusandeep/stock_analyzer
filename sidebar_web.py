@@ -103,10 +103,13 @@ with tb_tkr:
     _universe = get_all_tickers()
     ticker_options = sorted(_universe.keys())
     default_ticker = "AAPL" if "AAPL" in ticker_options else ticker_options[0]
+    # Drive the selectbox via session_state so external widgets (the
+    # "Recent" panel below) can swap the value with a single button click.
+    st.session_state.setdefault("ticker_input", default_ticker)
     ticker_raw = st.selectbox(
         "Ticker / company",
         options=ticker_options,
-        index=ticker_options.index(default_ticker),
+        key="ticker_input",
         format_func=lambda t: f"{t}  —  {_universe.get(t.upper(), '')}".rstrip(" —"),
         accept_new_options=True,
         help="Type a ticker (AAPL) or company name (Apple) — any symbol works even if not listed.",
@@ -481,6 +484,41 @@ with c_mid:
             sub="12m targets · multi-source",
             cols=2,
         )
+
+    # --- Recent searched tickers — clickable shortcuts so the gap below
+    #     Analyst & sentiment fills the column height. Reads from the
+    #     same source as the autocomplete (Supabase if configured, else
+    #     the local JSON), which means the order is recent-first when
+    #     Supabase is live (last_seen DESC) and alphabetical otherwise.
+    try:
+        from stockiq.data.tickers import _load_searched as _ls
+        _recent_items = list(_ls().items())[:12]
+    except Exception:
+        _recent_items = []
+
+    if _recent_items:
+        st.markdown(
+            panel_open(
+                "Recent searches",
+                f"{len(_recent_items)} tickers · click to analyze",
+            ),
+            unsafe_allow_html=True,
+        )
+        # Lay out 4 wide so a row of buttons stays readable on narrow viewports.
+        _row_size = 4
+        for i in range(0, len(_recent_items), _row_size):
+            cols_recent = st.columns(_row_size)
+            for j, (tkr, name) in enumerate(_recent_items[i:i + _row_size]):
+                with cols_recent[j]:
+                    if st.button(
+                        tkr,
+                        key=f"recent_{tkr}",
+                        help=name,
+                        width="stretch",
+                    ):
+                        st.session_state["ticker_input"] = tkr
+                        st.rerun()
+        st.markdown(panel_close(), unsafe_allow_html=True)
 
 
 # ---- Smart-money column (col 3): institutional holders + unusual opts ------
