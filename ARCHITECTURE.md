@@ -22,7 +22,7 @@ flowchart LR
     Collector[EnhancedDataCollector<br/>stockiq.data.collector]:::data
     Inst[EnhancedInstitutionalData<br/>stockiq.data.institutional]:::data
     Options[Options module<br/>stockiq.data.options]:::data
-    Tickers[POPULAR_TICKERS<br/>stockiq.data.tickers]:::data
+    Tickers[Ticker universe<br/>POPULAR + SEC + searched<br/>stockiq.data.tickers]:::data
 
     ML[ML pipeline<br/>RF + GB ensemble<br/>5d · 21d · 63d horizons]:::core
     PredLog[PredictionLog<br/>stockiq.core.prediction_log]:::core
@@ -36,8 +36,10 @@ flowchart LR
     YahooRSS[Yahoo Finance RSS<br/>aggregator]:::external
     MWRSS[MarketWatch RSS<br/>aggregator]:::external
     SectorETF[Sector SPDRs<br/>XLK/XLF/XLV/...]:::external
+    SECList[SEC company_tickers.json<br/>~10K US equities]:::external
     Supabase[(Supabase<br/>predictions table)]:::store
     Parquet[(data/predictions.parquet<br/>local fallback)]:::store
+    SearchedFile[(data/searched_tickers.json<br/>remembered searches)]:::store
 
     Publishers[Publisher labels passed through:<br/>Motley Fool · Benzinga · IBD · MarketBeat<br/>Seeking Alpha · CNBC · Reuters · Zacks<br/>Barron's · Business Insider · MSN · TIKR<br/>StockStory · TradingKey · ...]:::passthrough
 
@@ -47,6 +49,8 @@ flowchart LR
     Streamlit --> Components
     Streamlit --> Theme
     Streamlit --> Tickers
+    Tickers -->|7-day cached fetch| SECList
+    Tickers <-.->|read/write| SearchedFile
 
     Analyzer --> Collector
     Analyzer --> Inst
@@ -226,6 +230,7 @@ UI functions are also written defensively against signature mismatches: e.g., `p
 | **Yahoo Finance RSS** (aggregator) | `feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}` | Free | Same | Timeout → skip |
 | **MarketWatch RSS** (aggregator) | Per-ticker headline feed | Free | Same | Timeout → skip |
 | Sector SPDR ETFs | Peer relative strength (XLK / XLF / XLV / XLY / XLP / XLI / XLE / XLC / XLU / XLRE / XLB) — fetched via yfinance | Free (via yfinance) | Inherited | Feature defaults to 0 |
+| **SEC company_tickers.json** | All ~10K US-listed equities — fed into the autocomplete dropdown | Free, official | Strict on User-Agent format ("Name email@domain"); rate-limited if abused | Falls back to curated POPULAR_TICKERS only |
 | Supabase | Persistent prediction log | Free tier (500MB DB) | 50K monthly active users | Parquet fallback |
 
 ### Publishers shown in the News Feed (passed through, not directly fetched)

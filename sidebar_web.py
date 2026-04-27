@@ -29,7 +29,7 @@ def _import_stockiq_modules():
         from stockiq.core.analyzer import UniversalStockAnalyzer
         from stockiq.core.prediction_log import PredictionLog
         from stockiq.data.options import get_options_flow, get_unusual_activity
-        from stockiq.data.tickers import POPULAR_TICKERS
+        from stockiq.data.tickers import POPULAR_TICKERS, get_all_tickers, remember_ticker
         from stockiq.ui.components import (
             earnings_history_block, external_links, fmt_big_money, fmt_pct,
             fmt_pct_ratio, fmt_price, fmt_ratio, header_band,
@@ -95,14 +95,19 @@ with tb_logo:
     )
 with tb_tkr:
     # Searchable dropdown: type a ticker or company name. accept_new_options
-    # lets users pick any symbol not in POPULAR_TICKERS.
-    ticker_options = sorted(POPULAR_TICKERS.keys())
+    # lets users pick any symbol not in the merged universe.
+    #
+    # Universe = SEC official list (~10K US-listed equities, cached for 7
+    # days) ∪ previously-analyzed tickers (data/searched_tickers.json) ∪
+    # hand-curated POPULAR_TICKERS. Curated names win on conflict.
+    _universe = get_all_tickers()
+    ticker_options = sorted(_universe.keys())
     default_ticker = "AAPL" if "AAPL" in ticker_options else ticker_options[0]
     ticker_raw = st.selectbox(
         "Ticker / company",
         options=ticker_options,
         index=ticker_options.index(default_ticker),
-        format_func=lambda t: f"{t}  —  {POPULAR_TICKERS.get(t.upper(), '')}".rstrip(" —"),
+        format_func=lambda t: f"{t}  —  {_universe.get(t.upper(), '')}".rstrip(" —"),
         accept_new_options=True,
         help="Type a ticker (AAPL) or company name (Apple) — any symbol works even if not listed.",
         label_visibility="collapsed",
@@ -213,6 +218,18 @@ unusual_opts = get_unusual_activity(ticker, top_n=10, min_voi_ratio=2.0)
 hist = data["hist"]
 info = data.get("info", {}) or {}
 tech = data.get("tech_data", {}) or {}
+
+# Persist the ticker we just analyzed so it shows up in the dropdown
+# next time. Curated and SEC-listed tickers are skipped inside the
+# helper, so this only affects crypto / indices / forex / unusual ADRs.
+try:
+    remember_ticker(
+        ticker,
+        info.get("longName") or info.get("shortName"),
+    )
+except Exception:
+    pass
+
 fund = data.get("fundamental_data", {}) or {}
 sent = data.get("sentiment_data", {}) or {}
 ml = data.get("ml_prediction") or {}

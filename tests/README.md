@@ -31,6 +31,7 @@ No API keys, no network, no Supabase required for any test.
 | `test_sentiment.py` | Keyword sentiment classifier — polarity, case-insensitivity, word-boundary matching (no false "win" match in "winter"), bounded [-1, 1] | Feeds multiple ML features and the news feed per-article colors |
 | `test_formatters.py` | `fmt_price` / `fmt_pct` / `fmt_ratio` / `fmt_pct_ratio` / `fmt_big_money` / `_cls` edge cases (None, zero, negative, large) | Every panel uses these; a regression silently breaks every number display |
 | `test_earnings_calendar.py` | `get_earnings_calendar` parses both the new dict-form and old DataFrame-form `ticker.calendar`, falls back to `earnings_dates`, handles exceptions safely, ignores past dates | yfinance quietly changed this return type; parsing bugs here caused "NEXT EARNINGS —" everywhere |
+| `test_ticker_universe.py` | `remember_ticker` persists/skips correctly, `get_all_tickers` merges POPULAR + SEC + searched with the right precedence (curated names win on conflict) | The dropdown's autocomplete coverage and dedupe logic — wrong precedence here would replace nice curated names with SEC's flat ALLCAPS |
 
 ---
 
