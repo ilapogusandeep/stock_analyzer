@@ -127,20 +127,27 @@ SCANNER_HEADERS = [
 ]
 
 
-def _scanner_grid_html(rows: list[dict]) -> str:
+def _scanner_grid_html(rows: list[dict], removable: bool = False) -> str:
     """Build the inner grid HTML for a scanner result set. Returns a
     string (caller embeds inside panel_open/panel_close in a single
     st.markdown call so Streamlit doesn't break the grid by wrapping
-    each markdown invocation in its own container)."""
+    each markdown invocation in its own container).
+
+    When ``removable`` is True a 9th column is appended with an inline
+    × link that routes to ``?wl_remove=<ticker>`` — used by the watchlist
+    panel so users can drop a row in one click without breaking the grid.
+    """
     if not rows:
         return '<div class="sent-label">No tickers to scan yet.</div>'
 
     parts: list[str] = []
-    # Header row -- 8 cells matching SCANNER_HEADERS
+    # Header row -- 8 cells matching SCANNER_HEADERS (+ 1 empty for × col)
     for _, label in SCANNER_HEADERS:
         parts.append(f'<div class="sc-th">{label}</div>')
+    if removable:
+        parts.append('<div class="sc-th"></div>')
 
-    # Data rows -- 8 cells each, flat under the grid (no .sc-row wrapper).
+    # Data rows -- 8 (or 9) cells each, flat under the grid.
     for r in rows:
         ticker = r.get("ticker", "—")
         price = r.get("price")
@@ -179,8 +186,18 @@ def _scanner_grid_html(rows: list[dict]) -> str:
             f'<div class="{td_cls}"><span class="sc-score">{score:.0f}</span></div>'
         )
         parts.append(f'<div class="{td_cls}">{_bias_pill(bias)}</div>')
+        if removable:
+            parts.append(
+                f'<div class="{td_cls}">'
+                f'<a class="sc-rm" href="?wl_remove={ticker}" '
+                f'target="_self" title="Remove {ticker}">×</a>'
+                f'</div>'
+            )
 
-    grid_template = "60px 70px 64px 64px 64px 60px 50px 80px"
+    if removable:
+        grid_template = "60px 70px 64px 64px 64px 60px 50px 80px 28px"
+    else:
+        grid_template = "60px 70px 64px 64px 64px 60px 50px 80px"
     return (
         f'<div class="sc-grid" style="grid-template-columns: {grid_template};">'
         + "".join(parts) + '</div>'
@@ -206,49 +223,27 @@ def render_watchlist_section(
 
     # Emit the full panel (open + grid + close) in ONE st.markdown call;
     # splitting these across separate calls makes Streamlit wrap each in
-    # its own container which kills the CSS grid layout.
+    # its own container which kills the CSS grid layout. Each row gets
+    # an inline × column (removable=True) that routes to ?wl_remove=<sym>
+    # — the top-level handler in sidebar_web.py calls remove() and reruns.
     st.markdown(
         panel_open("Watchlist", sub)
-        + _scanner_grid_html(rows)
+        + _scanner_grid_html(rows, removable=True)
         + panel_close(),
         unsafe_allow_html=True,
     )
 
-    # Per-ticker remove buttons -- Streamlit-native, so they can't live
-    # inside the HTML grid above. Rendered as a compact row beneath.
-    invalid_tickers = [r["ticker"] for r in rows if r.get("price") is None]
-    if rows:
-        cols = st.columns(min(len(rows), 8) or 1)
-        for i, r in enumerate(rows):
-            with cols[i % 8]:
-                if st.button(
-                    f"× {r['ticker']}",
-                    key=f"wl_rm_{r['ticker']}",
-                    help=f"Remove {r['ticker']} from watchlist",
-                ):
-                    remove_callback(r["ticker"])
-                    st.rerun()
-
-    # Bulk-remove all rows that came back without price data (typo'd
-    # tickers, delisted symbols, etc.). Only render when there's
-    # actually something to clean.
-    if invalid_tickers:
-        if st.button(
-            f"🧹 Clean up {len(invalid_tickers)} invalid",
-            key="wl_clean_btn",
-            help="Remove every watchlist row whose symbol returned no price data",
-        ):
-            for tkr in invalid_tickers:
-                remove_callback(tkr)
-            st.rerun()
-
-    # Add input + Add button + Refresh button laid out in one row.
-    add_col, btn_col, refresh_col = st.columns([0.55, 0.20, 0.25])
+    # Add input + ➕ Add + 🔄 Refresh — one compact row, all aligned to
+    # the same baseline so heights match (Streamlit defaults to top-align
+    # which leaves the buttons floating above the input).
+    add_col, btn_col, refresh_col = st.columns(
+        [0.58, 0.18, 0.24], vertical_alignment="bottom",
+    )
     with add_col:
         new_ticker = st.text_input(
             "Add ticker to watchlist",
             key="wl_add_input",
-            placeholder="e.g. NBIS, BTC-USD, ^VIX",
+            placeholder="Add ticker (NBIS, BTC-USD, ^VIX) or company name",
             label_visibility="collapsed",
         )
     with btn_col:
@@ -271,7 +266,7 @@ def render_watchlist_section(
                         "'^' for indices (^GSPC), '=X' for forex (EURUSD=X)."
                     )
     with refresh_col:
-        if st.button("🔄 Refresh signals", key="wl_refresh_btn", width="stretch"):
+        if st.button("🔄 Refresh", key="wl_refresh_btn", width="stretch"):
             st.session_state["wl_force_refresh"] = True
             st.rerun()
 

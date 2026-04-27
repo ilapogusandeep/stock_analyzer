@@ -94,24 +94,29 @@ DENSE_DARK_CSS = """
      Recent-search pills aren't stButtons (they're HTML anchors), so
      they're untouched.   */
   [data-testid="stButton"] > button[kind="secondary"] {
-      background: rgba(148,163,255,0.06) !important;
-      border: 1px solid rgba(148,163,255,0.20) !important;
-      border-radius: 10px !important;
-      padding: 4px 12px !important;
-      color: #e6ebff !important;
+      background: linear-gradient(180deg, rgba(99,102,241,0.14), rgba(99,102,241,0.06)) !important;
+      border: 1px solid rgba(129,140,248,0.35) !important;
+      border-radius: 8px !important;
+      padding: 8px 14px !important;
+      color: #c7d2fe !important;
       font-weight: 600 !important;
       font-size: 0.78rem !important;
-      transition: all 0.12s ease;
-      min-height: 32px !important;
-      height: auto !important;
+      letter-spacing: 0.02em !important;
+      transition: all 0.15s ease;
+      min-height: 38px !important;
+      height: 38px !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
   }
   [data-testid="stButton"] > button[kind="secondary"]:hover {
-      background: rgba(148,163,255,0.12) !important;
-      border-color: rgba(148,163,255,0.40) !important;
-      color: #fff !important;
+      background: linear-gradient(180deg, rgba(99,102,241,0.28), rgba(99,102,241,0.12)) !important;
+      border-color: rgba(129,140,248,0.65) !important;
+      color: #ffffff !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(99,102,241,0.22), inset 0 1px 0 rgba(255,255,255,0.10);
   }
   [data-testid="stButton"] > button[kind="secondary"]:active {
-      transform: translateY(1px);
+      transform: translateY(0);
+      box-shadow: inset 0 1px 0 rgba(0,0,0,0.10);
   }
 
   /* ===== Recent-search pills (clickable HTML anchors, not stButton) ===== */
@@ -200,6 +205,32 @@ DENSE_DARK_CSS = """
       text-transform: uppercase;
       vertical-align: middle;
   }
+  /* Inline × link in each watchlist row — anchor (not stButton) so it
+     can live inside the CSS grid without Streamlit wrapping it. Routes
+     to ?wl_remove=<ticker>; sidebar_web.py reads the param and calls
+     watchlist.remove() before rerunning. */
+  .sc-rm {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: 6px;
+      background: rgba(239,68,68,0.10);
+      border: 1px solid rgba(239,68,68,0.28);
+      color: #f87171 !important;
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1;
+      text-decoration: none !important;
+      transition: all 0.12s ease;
+  }
+  .sc-rm:hover {
+      background: rgba(239,68,68,0.22);
+      border-color: rgba(239,68,68,0.55);
+      color: #fff !important;
+      transform: scale(1.08);
+  }
+  .sc-rm:active { transform: scale(1.0); }
 
   /* ===== Header band ===== */
   .hb {

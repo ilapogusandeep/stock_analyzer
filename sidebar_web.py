@@ -72,14 +72,22 @@ st.set_page_config(
 )
 inject_theme()
 
-# Query-param handler for the Recent Searches pills. Each pill links to
-# ?ticker=<sym>; we read it once into session_state, then clear so a
-# manual refresh doesn't re-trigger and so the URL stays clean.
+# Query-param handlers. Each interactive HTML control on the page links
+# back via a query param so it can live inside the CSS grid (instead of
+# breaking layout with a Streamlit button). We read once into
+# session_state, then clear so a manual refresh doesn't re-trigger and
+# so the URL stays clean.
 try:
     _qp_ticker = (st.query_params.get("ticker") or "").strip().upper()
     if _qp_ticker:
         st.session_state["ticker_input"] = _qp_ticker
         st.query_params.clear()
+    _qp_wl_rm = (st.query_params.get("wl_remove") or "").strip().upper()
+    if _qp_wl_rm:
+        from stockiq.data import watchlist as _wl_qp
+        _wl_qp.remove(_qp_wl_rm)
+        st.query_params.clear()
+        st.rerun()
 except Exception:
     pass
 
