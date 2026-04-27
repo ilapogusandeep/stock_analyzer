@@ -184,7 +184,9 @@ if "Scanner" in view:
             st.session_state[f"{prefix}_bust"] = int(_time.time())
         return st.session_state.get(f"{prefix}_bust", 0)
 
-    # ----- Watchlist -------------------------------------------------------
+    # ----- Build both sections' data first so we can render them
+    #       side-by-side in two columns. Heavy work is cached either
+    #       way, so order of fetch doesn't matter.
     wl_bust = _bust_for("wl")
     try:
         wl_tickers = _wl.list_tickers()
@@ -196,18 +198,8 @@ if "Scanner" in view:
         with st.spinner(f"Scanning {tkr}…"):
             wl_rows.append(_scan_signal(tkr, wl_bust))
     wl_rows = rank_signals(wl_rows)
+    wl_last_min = (_time.time() - wl_bust) / 60.0 if wl_bust else None
 
-    last_min = (_time.time() - wl_bust) / 60.0 if wl_bust else None
-    render_watchlist_section(
-        wl_rows,
-        remove_callback=_wl.remove,
-        add_callback=_wl.add,
-        last_refreshed_min=last_min,
-    )
-
-    st.markdown('<div style="height:14px;"></div>', unsafe_allow_html=True)
-
-    # ----- Curated universe scan ------------------------------------------
     uni_bust = _bust_for("universe")
     try:
         searched_recent = list(_ls().keys())[:10]
@@ -228,8 +220,21 @@ if "Scanner" in view:
     progress.empty()
 
     uni_top = rank_signals(uni_rows)[:15]
-    last_min_u = (_time.time() - uni_bust) / 60.0 if uni_bust else None
-    render_universe_section(uni_top, last_min_u, len(universe))
+    uni_last_min = (_time.time() - uni_bust) / 60.0 if uni_bust else None
+
+    # Side-by-side layout — watchlist (left) + top movers (right). Each
+    # scanner table is ~512px wide via grid-template-columns; even at
+    # 50% of a 1500px viewport that's plenty of room.
+    sc_left, sc_right = st.columns([0.5, 0.5])
+    with sc_left:
+        render_watchlist_section(
+            wl_rows,
+            remove_callback=_wl.remove,
+            add_callback=_wl.add,
+            last_refreshed_min=wl_last_min,
+        )
+    with sc_right:
+        render_universe_section(uni_top, uni_last_min, len(universe))
     st.stop()
 
 
