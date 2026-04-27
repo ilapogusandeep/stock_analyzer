@@ -72,6 +72,17 @@ st.set_page_config(
 )
 inject_theme()
 
+# Query-param handler for the Recent Searches pills. Each pill links to
+# ?ticker=<sym>; we read it once into session_state, then clear so a
+# manual refresh doesn't re-trigger and so the URL stays clean.
+try:
+    _qp_ticker = (st.query_params.get("ticker") or "").strip().upper()
+    if _qp_ticker:
+        st.session_state["ticker_input"] = _qp_ticker
+        st.query_params.clear()
+except Exception:
+    pass
+
 DARK_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(255,255,255,0.02)",
@@ -517,11 +528,12 @@ with c_mid:
             cols=2,
         )
 
-    # --- Recent searched tickers — clickable shortcuts so the gap below
-    #     Analyst & sentiment fills the column height. Reads from the
-    #     same source as the autocomplete (Supabase if configured, else
-    #     the local JSON), which means the order is recent-first when
-    #     Supabase is live (last_seen DESC) and alphabetical otherwise.
+    # --- Recent searched tickers — clickable HTML pills (mirrors the
+    #     options-flow pill layout). Each pill links to ?ticker=<sym>;
+    #     the top-of-script handler reads the query param, sets the
+    #     selectbox value via session_state, and clears the URL so a
+    #     refresh doesn't re-fire. No st.button so we get true compact
+    #     pill chrome instead of full-width Streamlit button defaults.
     try:
         from stockiq.data.tickers import _load_searched as _ls
         _recent_items = list(_ls().items())[:12]
@@ -529,28 +541,26 @@ with c_mid:
         _recent_items = []
 
     if _recent_items:
+        _pills = ""
+        for tkr, name in _recent_items:
+            safe_tkr = str(tkr).replace("<", "&lt;").replace(">", "&gt;")
+            safe_name = (str(name or "").replace("<", "&lt;")
+                                          .replace(">", "&gt;")
+                                          .replace('"', "&quot;"))
+            _pills += (
+                f'<a class="rs-pill" href="?ticker={safe_tkr}" '
+                f'title="{safe_name}" target="_self">'
+                f'{safe_tkr}</a>'
+            )
         st.markdown(
             panel_open(
                 "Recent searches",
                 f"{len(_recent_items)} tickers · click to analyze",
-            ),
+            )
+            + f'<div class="of-pills">{_pills}</div>'
+            + panel_close(),
             unsafe_allow_html=True,
         )
-        # Lay out 4 wide so a row of buttons stays readable on narrow viewports.
-        _row_size = 4
-        for i in range(0, len(_recent_items), _row_size):
-            cols_recent = st.columns(_row_size)
-            for j, (tkr, name) in enumerate(_recent_items[i:i + _row_size]):
-                with cols_recent[j]:
-                    if st.button(
-                        tkr,
-                        key=f"recent_{tkr}",
-                        help=name,
-                        width="stretch",
-                    ):
-                        st.session_state["ticker_input"] = tkr
-                        st.rerun()
-        st.markdown(panel_close(), unsafe_allow_html=True)
 
 
 # ---- Smart-money column (col 3): institutional holders + unusual opts ------
