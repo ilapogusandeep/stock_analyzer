@@ -497,7 +497,14 @@ def _remember_file(ticker: str, company_name: str) -> None:
 
 def remember_ticker(ticker: str, company_name: Optional[str]) -> None:
     """Persist a ticker the user just analyzed so it appears in the
-    dropdown next session. Silently no-ops on any failure.
+    "Recent searches" panel and the dropdown next session. Silently
+    no-ops on any failure.
+
+    Records *every* analyzed ticker including curated ones (POPULAR
+    + SEC), so the Recent panel reflects real activity rather than
+    just non-listed tickers. The merged ticker universe still uses
+    POPULAR's curated display names on conflict, so this doesn't
+    affect what the autocomplete shows.
 
     Prefers Supabase when SUPABASE_URL and SUPABASE_KEY are configured
     (so personal tickers survive Streamlit Cloud redeploys). Falls
@@ -506,8 +513,6 @@ def remember_ticker(ticker: str, company_name: Optional[str]) -> None:
     if not ticker or not company_name:
         return
     ticker = ticker.strip().upper()
-    if ticker in POPULAR_TICKERS:
-        return  # curated, no need to remember
 
     url, key = _supabase_creds()
     if url and key:

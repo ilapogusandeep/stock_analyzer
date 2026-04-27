@@ -54,11 +54,14 @@ def test_remember_appends_multiple(isolated_searched):
     assert data == {"BTC-USD": "Bitcoin USD", "ETH-USD": "Ethereum USD"}
 
 
-def test_remember_skips_already_curated(isolated_searched):
-    """AAPL is in POPULAR_TICKERS — no point persisting it again."""
+def test_remember_records_curated_tickers_too(isolated_searched):
+    """Curated tickers are also persisted so the Recent panel reflects
+    actual analysis activity (not just non-listed names)."""
     assert "AAPL" in POPULAR_TICKERS
     remember_ticker("AAPL", "Apple Inc.")
-    assert not isolated_searched.exists()
+    assert isolated_searched.exists()
+    data = json.loads(isolated_searched.read_text())
+    assert data == {"AAPL": "Apple Inc."}
 
 
 def test_remember_noop_on_falsy_inputs(isolated_searched):
