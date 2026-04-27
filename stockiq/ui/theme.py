@@ -158,6 +158,22 @@ DENSE_DARK_CSS = """
       color: #fbbf24;
       font-weight: 700;
   }
+  .sc-td-invalid {
+      opacity: 0.55;
+  }
+  .sc-invalid-tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 6px;
+      background: rgba(239,68,68,0.18);
+      color: #f87171;
+      font-size: 0.55rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      vertical-align: middle;
+  }
 
   /* ===== Header band ===== */
   .hb {

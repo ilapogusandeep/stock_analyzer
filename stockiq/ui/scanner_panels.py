@@ -32,6 +32,23 @@ def _bias_pill(bias: str) -> str:
     return f'<span class="{cls}">{bias}</span>'
 
 
+@st.cache_data(ttl=86400, show_spinner=False, max_entries=512)
+def _ticker_exists(ticker: str) -> bool:
+    """Quick yfinance sanity check that ``ticker`` resolves to real
+    price data. Cached for a day per ticker so repeated Add attempts on
+    the same symbol don't re-hit yfinance (and so a typo'd symbol stays
+    rejected within a session)."""
+    try:
+        import yfinance as yf
+    except ImportError:
+        return True  # if yfinance is missing, don't block the add
+    try:
+        hist = yf.Ticker(ticker.strip().upper()).history(period="5d")
+        return hist is not None and not hist.empty
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Scanner table — shared by watchlist and universe sections
 # ---------------------------------------------------------------------------
@@ -65,6 +82,7 @@ def _scanner_grid_html(rows: list[dict]) -> str:
     for r in rows:
         ticker = r.get("ticker", "—")
         price = r.get("price")
+        is_invalid = price is None  # yfinance returned no price -> bad symbol
         chg = r.get("change_1d")
         chg_cls = _cls(chg) if chg is not None else "flat"
         chg_str = fmt_pct(chg * 100, decimals=2) if chg is not None else "—"
@@ -75,23 +93,30 @@ def _scanner_grid_html(rows: list[dict]) -> str:
         score = r.get("score") or 0
         bias = r.get("bias", "NEUTRAL")
 
-        parts.append(
-            f'<div class="sc-td"><a class="rs-pill" href="?ticker={ticker}" '
-            f'target="_self">{ticker}</a></div>'
+        # Mark broken rows so users know to remove them. yfinance
+        # returns no price = the symbol doesn't resolve to real data.
+        td_cls = "sc-td sc-td-invalid" if is_invalid else "sc-td"
+        ticker_cell = (
+            f'<a class="rs-pill" href="?ticker={ticker}" '
+            f'target="_self">{ticker}</a>'
         )
-        parts.append(f'<div class="sc-td">{_fmt_price(price)}</div>')
+        if is_invalid:
+            ticker_cell += ' <span class="sc-invalid-tag">no data</span>'
+
+        parts.append(f'<div class="{td_cls}">{ticker_cell}</div>')
+        parts.append(f'<div class="{td_cls}">{_fmt_price(price)}</div>')
         parts.append(
-            f'<div class="sc-td"><span class="{chg_cls}">{chg_str}</span></div>'
+            f'<div class="{td_cls}"><span class="{chg_cls}">{chg_str}</span></div>'
         )
-        parts.append(f'<div class="sc-td">{unusual}</div>')
+        parts.append(f'<div class="{td_cls}">{unusual}</div>')
         parts.append(
-            f'<div class="sc-td"><span class="{agg_cls}">{_fmt_signed(agg)}</span></div>'
+            f'<div class="{td_cls}"><span class="{agg_cls}">{_fmt_signed(agg)}</span></div>'
         )
-        parts.append(f'<div class="sc-td">{velocity:.1f}×</div>')
+        parts.append(f'<div class="{td_cls}">{velocity:.1f}×</div>')
         parts.append(
-            f'<div class="sc-td"><span class="sc-score">{score:.0f}</span></div>'
+            f'<div class="{td_cls}"><span class="sc-score">{score:.0f}</span></div>'
         )
-        parts.append(f'<div class="sc-td">{_bias_pill(bias)}</div>')
+        parts.append(f'<div class="{td_cls}">{_bias_pill(bias)}</div>')
 
     grid_template = "60px 70px 64px 64px 64px 60px 50px 80px"
     return (
@@ -153,9 +178,17 @@ def render_watchlist_section(
     with btn_col:
         if st.button("➕ Add", key="wl_add_btn", width="stretch"):
             if new_ticker:
-                add_callback(new_ticker)
-                st.session_state.pop("wl_add_input", None)
-                st.rerun()
+                if _ticker_exists(new_ticker):
+                    add_callback(new_ticker)
+                    st.session_state.pop("wl_add_input", None)
+                    st.rerun()
+                else:
+                    st.error(
+                        f"Couldn't find ticker '{new_ticker.upper()}'. "
+                        "Check the symbol — yfinance uses '-USD' suffixes "
+                        "for crypto (BTC-USD), '^' prefixes for indices "
+                        "(^GSPC), and '=X' suffixes for forex (EURUSD=X)."
+                    )
     with refresh_col:
         if st.button("🔄 Refresh signals", key="wl_refresh_btn", width="stretch"):
             st.session_state["wl_force_refresh"] = True
