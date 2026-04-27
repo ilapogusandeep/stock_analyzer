@@ -100,6 +100,40 @@ We parse the `<source>` tag from every Google News RSS item and cross-fetch yfin
 
 ---
 
+---
+
+## The Scanner view
+
+A second top-level mode toggleable from the top bar (radio at right): switches the page from the per-ticker Analyze dashboard into a market-scanner that surfaces opportunities.
+
+### Watchlist
+
+User-curated list of tickers persisted to Supabase (`watchlist` table) so it survives redeploys. For each ticker the scanner pulls a **lightweight signal snapshot**:
+
+| Signal | What it measures |
+|---|---|
+| Price + 1-day Δ | spot move |
+| Unusual options count | strikes with V/OI ≥ 2× across the next 3 expiries |
+| Aggressor net | sum of +1 for BUY / -1 for SELL across unusual rows (bid-ask heuristic) |
+| News velocity | today's article count vs 7-day trailing avg per ticker |
+| Composite score | 0–100 weighted blend, clamped per-axis at 25 so no single dimension dominates |
+| Bias | BULLISH / NEUTRAL / BEARISH from aggressor + change_1d agreement |
+
+Add/remove tickers inline. Manual "Refresh signals" button to re-pull (cached 10 min so a refresh bypasses cache).
+
+### Top movers (curated universe)
+
+Same lightweight scan run across ~50 hand-picked names — mega-cap tech + semis + finance + popular ETFs + your watchlist + recent searches (capped). Sorted by composite score; top 15 surface in the table.
+
+Honest caveats:
+- The aggressor signal is a free-tier heuristic (yfinance gives end-of-day snapshots, not trade prints) — same caveats as the Analyze view's Unusual Options panel.
+- Scan results cached **10 minutes** to stay clear of yfinance rate limits. The first user pays the cost; subsequent renders are instant.
+- The Top movers list is opinionated about the universe. To scan a wider net you'd want Polygon ($29/mo) and a real per-ticker rate-limit budget.
+
+Click any ticker pill in the scanner → routes back to the Analyze view via `?ticker=` query param.
+
+---
+
 ## Setup
 
 ### Run locally
@@ -117,9 +151,10 @@ No API keys required for basic operation — yfinance + free RSS is enough. The 
 ### Enable persistent storage (recommended)
 
 1. Sign up at [supabase.com](https://supabase.com) (free tier is plenty — 500MB DB, no card)
-2. In Supabase SQL Editor, run **both** migrations in order:
+2. In Supabase SQL Editor, run **all three** migrations in order:
    - [`migrations/001_predictions.sql`](migrations/001_predictions.sql) — track-record table for the AI panels' calibration loop
    - [`migrations/002_searched_tickers.sql`](migrations/002_searched_tickers.sql) — autocomplete cache for non-SEC tickers (crypto, indices, forex, foreign ADRs)
+   - [`migrations/003_watchlist.sql`](migrations/003_watchlist.sql) — user-curated watchlist for the Scanner view
 3. Grab your Project URL + publishable/anon key from Project Settings → API
 4. Add to `.streamlit/secrets.toml` (or Streamlit Cloud app secrets):
 

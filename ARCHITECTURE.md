@@ -186,6 +186,7 @@ Two tables, both managed via PostgREST:
 |---|---|---|---|
 | `predictions` | `migrations/001_predictions.sql` | Per-analysis prediction rows for the AI calibration loop | `_log_supabase()` (POST), `_resolve_supabase()` (SELECT pending + PATCH), `_read_all_supabase()` (SELECT all) |
 | `searched_tickers` | `migrations/002_searched_tickers.sql` | Autocomplete cache for non-SEC tickers (crypto, indices, forex, foreign ADRs) | `_remember_supabase()` (UPSERT via `on_conflict=ticker` + `Prefer: resolution=merge-duplicates`), `_load_searched_supabase()` (SELECT all, ordered by last_seen) |
+| `watchlist` | `migrations/003_watchlist.sql` | User-curated focus list for the Scanner view | `_add_supabase()` (INSERT with `on_conflict=ignore`), `_remove_supabase()` (DELETE), `_list_supabase()` (SELECT all, ordered by added_at) |
 
 Both tables disable RLS for the single-user app (the publishable key is safe to commit; Supabase is designed for client-side use). REST traffic uses raw `requests` to keep the cold-start payload small — no `supabase-py` dependency.
 

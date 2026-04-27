@@ -32,6 +32,9 @@ No API keys, no network, no Supabase required for any test.
 | `test_formatters.py` | `fmt_price` / `fmt_pct` / `fmt_ratio` / `fmt_pct_ratio` / `fmt_big_money` / `_cls` edge cases (None, zero, negative, large) | Every panel uses these; a regression silently breaks every number display |
 | `test_earnings_calendar.py` | `get_earnings_calendar` parses both the new dict-form and old DataFrame-form `ticker.calendar`, falls back to `earnings_dates`, handles exceptions safely, ignores past dates | yfinance quietly changed this return type; parsing bugs here caused "NEXT EARNINGS —" everywhere |
 | `test_ticker_universe.py` | `remember_ticker` persists/skips correctly, `get_all_tickers` merges POPULAR + SEC + searched with the right precedence (curated names win on conflict) | The dropdown's autocomplete coverage and dedupe logic — wrong precedence here would replace nice curated names with SEC's flat ALLCAPS |
+| `test_watchlist.py` | `stockiq.data.watchlist` add/remove/list round-trip + Supabase ↔ file backend dispatch (and Supabase-failure-falls-back) | The Scanner view's watchlist is the user-curated focus list; broken persistence loses their selections silently |
+| `test_scanner_scorer.py` | `score_signal` math: zero / max / clamped components, bias derivation from aggressor + change_1d, `rank_signals` ordering | Scoring drives "Top movers" ranking — a bug here would surface false alerts at the top |
+| `test_scanner_universe.py` | `get_scan_universe` union-of-sources, dedupe-preserves-first-occurrence, recent-search cap, max-total cap, uppercase normalization | The universe is what gets scanned; a bug here either bloats the scan past rate limits or shrinks it past usefulness |
 
 ---
 

@@ -113,6 +113,58 @@ DENSE_DARK_CSS = """
   }
   .rs-pill:active { transform: translateY(0); }
 
+  /* Bias pills (used in scanner table) */
+  .rs-pill.rs-bull {
+      background: rgba(34,197,94,0.18);
+      border-color: rgba(34,197,94,0.45);
+      color: #4ade80 !important;
+  }
+  .rs-pill.rs-bear {
+      background: rgba(239,68,68,0.18);
+      border-color: rgba(239,68,68,0.45);
+      color: #f87171 !important;
+  }
+  .rs-pill.rs-neutral {
+      background: rgba(148,163,255,0.10);
+      border-color: rgba(148,163,255,0.30);
+      color: #cbd5e1 !important;
+  }
+
+  /* ===== Scanner grid (watchlist + universe tables) ===== */
+  .sc-grid {
+      display: grid;
+      column-gap: 8px;
+      row-gap: 4px;
+      align-items: center;
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+      margin: 4px 0;
+  }
+  .sc-th {
+      color: #94a3b8;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 700;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(148,163,255,0.10);
+  }
+  .sc-td {
+      color: #e6ebff;
+      padding: 6px 0;
+      border-bottom: 1px dashed rgba(148,163,255,0.06);
+  }
+  .sc-row {
+      display: contents; /* let children participate in the parent grid */
+  }
+  .sc-row:hover .sc-td {
+      background: rgba(148,163,255,0.04);
+  }
+  .sc-score {
+      color: #fbbf24;
+      font-weight: 700;
+  }
+
   /* ===== Header band ===== */
   .hb {
       display: grid;

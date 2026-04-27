@@ -133,7 +133,22 @@ with tb_fast:
                        help="Skip ML + backtest")
 with tb_run:
     run = st.button("Analyze", type="primary", width="stretch")
+with tb_spacer:
+    view = st.radio(
+        "View",
+        ["📊 Analyze", "🔍 Scanner"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="view_select",
+    )
 st.markdown('</div>', unsafe_allow_html=True)
+
+# A click on Analyze should always force us into Analyze view even if
+# the user was last on Scanner — the Run button is meaningless on the
+# Scanner page, so treat it as a view switch.
+if run and "Scanner" in view:
+    st.session_state["view_select"] = "📊 Analyze"
+    st.rerun()
 
 
 # Auto-analyze on selection change: once the user has run analysis at
@@ -142,6 +157,81 @@ st.markdown('</div>', unsafe_allow_html=True)
 # forcing a re-run on the same ticker (e.g. refresh data).
 if "last_analyzed_ticker" not in st.session_state:
     st.session_state.last_analyzed_ticker = None
+
+# ---------------------------------------------------------------------------
+# Scanner view branch — render watchlist + curated universe scan, then stop
+# so the heavy Analyze pipeline below doesn't run.
+# ---------------------------------------------------------------------------
+
+if "Scanner" in view:
+    import time as _time
+    from stockiq.data import watchlist as _wl
+    from stockiq.data.tickers import _load_searched as _ls
+    from stockiq.scanner.signals import compute_signals
+    from stockiq.scanner.universe import get_scan_universe
+    from stockiq.scanner.scorer import rank_signals
+    from stockiq.ui.scanner_panels import (
+        render_watchlist_section, render_universe_section,
+    )
+
+    @st.cache_data(ttl=600, show_spinner=False, max_entries=128)
+    def _scan_signal(ticker: str, _bust: int = 0):
+        return compute_signals(ticker)
+
+    def _bust_for(prefix: str) -> int:
+        flag = st.session_state.pop(f"{prefix}_force_refresh", False)
+        if flag:
+            st.session_state[f"{prefix}_bust"] = int(_time.time())
+        return st.session_state.get(f"{prefix}_bust", 0)
+
+    # ----- Watchlist -------------------------------------------------------
+    wl_bust = _bust_for("wl")
+    try:
+        wl_tickers = _wl.list_tickers()
+    except Exception:
+        wl_tickers = []
+
+    wl_rows = []
+    for tkr in wl_tickers[:25]:
+        with st.spinner(f"Scanning {tkr}…"):
+            wl_rows.append(_scan_signal(tkr, wl_bust))
+    wl_rows = rank_signals(wl_rows)
+
+    last_min = (_time.time() - wl_bust) / 60.0 if wl_bust else None
+    render_watchlist_section(
+        wl_rows,
+        remove_callback=_wl.remove,
+        add_callback=_wl.add,
+        last_refreshed_min=last_min,
+    )
+
+    st.markdown('<div style="height:14px;"></div>', unsafe_allow_html=True)
+
+    # ----- Curated universe scan ------------------------------------------
+    uni_bust = _bust_for("universe")
+    try:
+        searched_recent = list(_ls().keys())[:10]
+    except Exception:
+        searched_recent = []
+    universe = get_scan_universe(
+        watchlist=wl_tickers,
+        searched=searched_recent,
+        max_total=50,
+    )
+
+    uni_rows = []
+    progress = st.progress(0.0, text=f"Scanning universe (0/{len(universe)})")
+    for i, tkr in enumerate(universe):
+        uni_rows.append(_scan_signal(tkr, uni_bust))
+        progress.progress((i + 1) / len(universe),
+                          text=f"Scanning universe ({i+1}/{len(universe)})")
+    progress.empty()
+
+    uni_top = rank_signals(uni_rows)[:15]
+    last_min_u = (_time.time() - uni_bust) / 60.0 if uni_bust else None
+    render_universe_section(uni_top, last_min_u, len(universe))
+    st.stop()
+
 
 selected_changed = (
     bool(ticker)
