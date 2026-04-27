@@ -55,6 +55,27 @@ try:
 except (ImportError, Exception) as e:
     XGB_AVAILABLE = False
 
+
+# Module-level cache for sector ETF history. The 11 SPDR sector ETFs are
+# reused across every ticker analyzed -- caching at process level avoids
+# re-fetching XLK/XLF/etc on every analysis, which is one of the bigger
+# yfinance rate-limit triggers we hit. Cached for the container's
+# lifetime; daily price updates land on the next container start.
+from functools import lru_cache
+
+
+@lru_cache(maxsize=16)
+def _sector_etf_history_cached(etf_symbol: str):
+    try:
+        hist = yf.Ticker(etf_symbol).history(period="1y")
+        if hist is None or hist.empty:
+            return None
+        return hist
+    except Exception as e:
+        print(f"⚠️ sector ETF fetch error ({etf_symbol}): {e}")
+        return None
+
+
 class PortfolioManager:
     """Portfolio and watchlist management with alerts"""
     
@@ -424,23 +445,17 @@ class UniversalStockAnalyzer:
     def _fetch_sector_etf_history(self, info):
         """Map ticker.info['sector'] to a Select-Sector SPDR ETF and pull
         its 1-year price history. Returns DataFrame or None on failure.
+
+        Cached at module level (one fetch per ETF per process lifetime)
+        because the same 11 sector ETFs are reused across every ticker
+        analyzed -- without this, 100 analyses today = 100 redundant
+        XLK fetches, which yfinance happily 429's after 50.
         """
-        try:
-            import yfinance as yf
-        except Exception:
+        sector = (info or {}).get('sector') or ''
+        etf_symbol = self.SECTOR_ETF_MAP.get(sector)
+        if not etf_symbol:
             return None
-        try:
-            sector = (info or {}).get('sector') or ''
-            etf_symbol = self.SECTOR_ETF_MAP.get(sector)
-            if not etf_symbol:
-                return None
-            etf_hist = yf.Ticker(etf_symbol).history(period='1y')
-            if etf_hist is None or etf_hist.empty:
-                return None
-            return etf_hist
-        except Exception as e:
-            print(f"⚠️ sector ETF fetch error: {e}")
-            return None
+        return _sector_etf_history_cached(etf_symbol)
     
     def compute_technical_indicators(self, hist):
         """Compute comprehensive technical indicators"""

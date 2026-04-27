@@ -152,16 +152,40 @@ if not should_analyze:
 # Run analysis
 # ---------------------------------------------------------------------------
 
+@st.cache_data(ttl=300, show_spinner=False, max_entries=64)
+def _cached_analyze(ticker: str, fast_mode: bool):
+    """Run the full UniversalStockAnalyzer pipeline with a 5-minute
+    cache so repeat lookups on the same (ticker, mode) within 5 min
+    don't hit yfinance again. Reduces 429 rate-limit hits dramatically
+    when the user toggles or revisits tickers."""
+    return UniversalStockAnalyzer(ticker).analyze(
+        show_charts=True,
+        show_ml=not fast_mode,
+        show_fundamentals=True,
+        show_sentiment=True,
+    )
+
+
+def _looks_rate_limited(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(s in msg for s in (
+        "too many requests", "rate limit", "429", "throttle",
+    ))
+
+
 with st.spinner(f"Analyzing {ticker}…"):
     try:
-        data = UniversalStockAnalyzer(ticker).analyze(
-            show_charts=True,
-            show_ml=not fast,
-            show_fundamentals=True,
-            show_sentiment=True,
-        )
+        data = _cached_analyze(ticker, fast)
     except Exception as e:
-        st.error(f"Analysis failed: {e}")
+        if _looks_rate_limited(e):
+            st.warning(
+                f"⏳ **yfinance rate-limited the request for `{ticker}`.** "
+                "This is the upstream data provider, not our app. Wait "
+                "30–60 seconds and try again, or pick a different ticker "
+                "(any cached one analyzed in the last 5 min will load instantly)."
+            )
+        else:
+            st.error(f"Analysis failed: {e}")
         st.stop()
 
 if not data:
@@ -209,14 +233,22 @@ except Exception:
     # Logging failure should never block the UI.
     pass
 
-# --- Options flow (nearest-expiry put/call ratios + ATM IV).
-#    2-3s yfinance call; silently returns {} on failure.
-options_flow = get_options_flow(
-    ticker, spot=(data.get("tech_data") or {}).get("current_price")
-)
+# --- Options flow + unusual activity. Both call yfinance options chains
+#     (separate from the analyze() path), so cache them for 5 minutes
+#     to avoid duplicating those rate-limited requests on rerun.
+@st.cache_data(ttl=300, show_spinner=False, max_entries=128)
+def _cached_options_flow(ticker: str, spot: float | None):
+    return get_options_flow(ticker, spot=spot)
 
-# --- Unusual options activity — top strikes with V/OI ≥ 2× ranked by $ premium.
-unusual_opts = get_unusual_activity(ticker, top_n=10, min_voi_ratio=2.0)
+
+@st.cache_data(ttl=300, show_spinner=False, max_entries=128)
+def _cached_unusual(ticker: str):
+    return get_unusual_activity(ticker, top_n=10, min_voi_ratio=2.0)
+
+
+_spot = (data.get("tech_data") or {}).get("current_price")
+options_flow = _cached_options_flow(ticker, _spot)
+unusual_opts = _cached_unusual(ticker)
 
 hist = data["hist"]
 info = data.get("info", {}) or {}
