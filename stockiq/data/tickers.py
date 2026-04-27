@@ -342,6 +342,35 @@ _SEARCHED_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "searc
 _SEC_URL = "https://www.sec.gov/files/company_tickers.json"
 
 
+def _supabase_creds() -> tuple[Optional[str], Optional[str]]:
+    """Pull SUPABASE_URL / SUPABASE_KEY from env or st.secrets.
+
+    Same lookup order as stockiq.core.prediction_log: env wins so tests
+    can override; st.secrets fallback covers production. Returns
+    (None, None) when Supabase isn't configured -- the caller falls
+    back to the local JSON file in that case.
+    """
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_KEY")
+    if not (url and key):
+        try:
+            import streamlit as st
+            url = url or st.secrets.get("SUPABASE_URL")
+            key = key or st.secrets.get("SUPABASE_KEY")
+        except Exception:
+            pass
+    return (url or None), (key or None)
+
+
+def _sb_headers(key: str, prefer: str = "return=minimal") -> dict:
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "Prefer": prefer,
+    }
+
+
 def _fetch_sec_tickers() -> dict[str, str]:
     """Pull the SEC's company_tickers.json. Returns {} on any failure.
 
@@ -379,7 +408,32 @@ def _fetch_sec_tickers() -> dict[str, str]:
         return {}
 
 
-def _load_searched() -> dict[str, str]:
+def _load_searched_supabase(url: str, key: str) -> dict[str, str]:
+    """Pull all rows from searched_tickers. Returns {} on any failure."""
+    try:
+        import requests
+    except ImportError:
+        return {}
+    try:
+        r = requests.get(
+            f"{url}/rest/v1/searched_tickers"
+            "?select=ticker,company_name&order=last_seen.desc&limit=10000",
+            headers=_sb_headers(key, prefer="count=none"),
+            timeout=8,
+        )
+        if r.status_code != 200:
+            return {}
+        rows = r.json() or []
+        return {
+            str(row.get("ticker") or "").upper(): str(row.get("company_name") or "")
+            for row in rows
+            if row.get("ticker") and row.get("company_name")
+        }
+    except Exception:
+        return {}
+
+
+def _load_searched_file() -> dict[str, str]:
     """Read previously-searched tickers from disk. Empty dict on failure."""
     try:
         if _SEARCHED_PATH.exists():
@@ -392,18 +446,46 @@ def _load_searched() -> dict[str, str]:
     return {}
 
 
-def remember_ticker(ticker: str, company_name: Optional[str]) -> None:
-    """Persist a ticker the user just analyzed so it appears in the
-    dropdown next session. Silently no-ops if the filesystem isn't
-    writable (Streamlit Cloud may run read-only on some paths)."""
-    if not ticker or not company_name:
-        return
-    ticker = ticker.strip().upper()
-    if ticker in POPULAR_TICKERS:
-        return  # already in the curated set, nothing to add
+def _load_searched() -> dict[str, str]:
+    """Backend-aware load: Supabase when configured, file otherwise."""
+    url, key = _supabase_creds()
+    if url and key:
+        return _load_searched_supabase(url, key)
+    return _load_searched_file()
+
+
+def _remember_supabase(url: str, key: str, ticker: str, company_name: str) -> bool:
+    """Upsert one ticker. Returns True on success, False on any failure
+    (caller may fall back to the local JSON if it likes)."""
+    try:
+        import requests
+    except ImportError:
+        return False
+    try:
+        # Use PostgREST upsert: POST with on_conflict + Prefer header.
+        # Bumps last_seen on every analysis, keeps first_seen stable.
+        r = requests.post(
+            f"{url}/rest/v1/searched_tickers?on_conflict=ticker",
+            headers=_sb_headers(
+                key,
+                prefer="resolution=merge-duplicates,return=minimal",
+            ),
+            json={
+                "ticker": ticker,
+                "company_name": company_name,
+                "last_seen": "now()",
+            },
+            timeout=8,
+        )
+        return r.status_code in (200, 201, 204)
+    except Exception:
+        return False
+
+
+def _remember_file(ticker: str, company_name: str) -> None:
     try:
         _SEARCHED_PATH.parent.mkdir(parents=True, exist_ok=True)
-        existing = _load_searched()
+        existing = _load_searched_file()
         if existing.get(ticker) == company_name:
             return
         existing[ticker] = company_name
@@ -411,6 +493,29 @@ def remember_ticker(ticker: str, company_name: Optional[str]) -> None:
             json.dump(existing, f, indent=2, sort_keys=True)
     except Exception:
         pass
+
+
+def remember_ticker(ticker: str, company_name: Optional[str]) -> None:
+    """Persist a ticker the user just analyzed so it appears in the
+    dropdown next session. Silently no-ops on any failure.
+
+    Prefers Supabase when SUPABASE_URL and SUPABASE_KEY are configured
+    (so personal tickers survive Streamlit Cloud redeploys). Falls
+    back to data/searched_tickers.json otherwise.
+    """
+    if not ticker or not company_name:
+        return
+    ticker = ticker.strip().upper()
+    if ticker in POPULAR_TICKERS:
+        return  # curated, no need to remember
+
+    url, key = _supabase_creds()
+    if url and key:
+        if _remember_supabase(url, key, ticker, str(company_name)):
+            return
+        # Supabase failed; quietly fall back to the local file so the
+        # ticker still gets cached for this container's lifetime.
+    _remember_file(ticker, str(company_name))
 
 
 def get_all_tickers(include_sec: bool = True) -> dict[str, str]:

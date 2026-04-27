@@ -37,9 +37,9 @@ flowchart LR
     MWRSS[MarketWatch RSS<br/>aggregator]:::external
     SectorETF[Sector SPDRs<br/>XLK/XLF/XLV/...]:::external
     SECList[SEC company_tickers.json<br/>~10K US equities]:::external
-    Supabase[(Supabase<br/>predictions table)]:::store
+    Supabase[(Supabase<br/>predictions + searched_tickers tables)]:::store
     Parquet[(data/predictions.parquet<br/>local fallback)]:::store
-    SearchedFile[(data/searched_tickers.json<br/>remembered searches)]:::store
+    SearchedFile[(data/searched_tickers.json<br/>local fallback)]:::store
 
     Publishers[Publisher labels passed through:<br/>Motley Fool · Benzinga · IBD · MarketBeat<br/>Seeking Alpha · CNBC · Reuters · Zacks<br/>Barron's · Business Insider · MSN · TIKR<br/>StockStory · TradingKey · ...]:::passthrough
 
@@ -50,7 +50,8 @@ flowchart LR
     Streamlit --> Theme
     Streamlit --> Tickers
     Tickers -->|7-day cached fetch| SECList
-    Tickers <-.->|read/write| SearchedFile
+    Tickers -.->|if SUPABASE_URL set| Supabase
+    Tickers -.->|fallback| SearchedFile
 
     Analyzer --> Collector
     Analyzer --> Inst
@@ -175,26 +176,34 @@ At hit_rate = 0.5, trust = 0 → full shrinkage to uniform. At 1.0, trust = 1 �
 
 ## Storage layer
 
-Two backends, chosen at runtime based on whether `SUPABASE_URL` + `SUPABASE_KEY` are in `st.secrets` or env:
+Two persisted-state surfaces — predictions and searched tickers. Each one chooses Supabase vs a local file at runtime based on whether `SUPABASE_URL` + `SUPABASE_KEY` are in `st.secrets` or env. Both share the same dispatch pattern: a private `_supabase_*` path and a `_file_*` fallback, with the public function picking the live backend.
 
 ### Supabase (preferred)
 
-- **Single table** `predictions` — schema in `migrations/001_predictions.sql`.
-- Indexes: `(ticker)`, `(timestamp desc)`, `(timestamp) WHERE hit IS NULL` (partial index for the resolution job).
-- RLS disabled for single-user app. The publishable key is safe to commit; Supabase is designed for client-side use.
-- REST API via raw `requests` (no `supabase-py` dependency, keeps cold start fast).
+Two tables, both managed via PostgREST:
 
-Key operations:
-- `_log_supabase()` — one `POST /rest/v1/predictions` per prediction.
-- `_resolve_supabase()` — pulls up to 500 unresolved rows, filters by `timestamp + resolution_horizon_days ≤ now()` **in Python** (PostgREST can't express that interval arithmetic in a query param), groups by ticker so each yfinance price call resolves multiple rows, PATCHes each row individually.
-- `_read_all_supabase()` — `GET /rest/v1/predictions?select=*&order=timestamp.desc&limit=2000`, returns a DataFrame.
+| Table | Migration | Purpose | Key ops |
+|---|---|---|---|
+| `predictions` | `migrations/001_predictions.sql` | Per-analysis prediction rows for the AI calibration loop | `_log_supabase()` (POST), `_resolve_supabase()` (SELECT pending + PATCH), `_read_all_supabase()` (SELECT all) |
+| `searched_tickers` | `migrations/002_searched_tickers.sql` | Autocomplete cache for non-SEC tickers (crypto, indices, forex, foreign ADRs) | `_remember_supabase()` (UPSERT via `on_conflict=ticker` + `Prefer: resolution=merge-duplicates`), `_load_searched_supabase()` (SELECT all, ordered by last_seen) |
 
-### Parquet fallback
+Both tables disable RLS for the single-user app (the publishable key is safe to commit; Supabase is designed for client-side use). REST traffic uses raw `requests` to keep the cold-start payload small — no `supabase-py` dependency.
 
-- File at `data/predictions.parquet`. Full read + full rewrite on every log (crude but fine at our scale).
-- On Streamlit Cloud this survives reruns within a container but resets on redeploy — the main reason to prefer Supabase.
+A note on the resolution job: PostgREST can't express `timestamp + resolution_horizon_days * interval '1 day' ≤ now()` as a query param, so `_resolve_supabase()` pulls up to 500 unresolved rows and filters by per-row horizon **in Python**, then groups by ticker so each yfinance price call resolves multiple rows.
 
-Both backends share the same public API (`log` / `resolve_pending` / `summary`) and the same row schema. Dispatch happens in the public methods via `self._using_supabase()`.
+### Local file fallback
+
+| File | Purpose | Backing function |
+|---|---|---|
+| `data/predictions.parquet` | Same schema as the predictions table; full read + full rewrite per log call | `_log_parquet`, `_resolve_parquet` |
+| `data/searched_tickers.json` | `{ticker: company_name}` flat dict | `_remember_file`, `_load_searched_file` |
+
+On Streamlit Cloud both files live on the ephemeral container filesystem — they survive reruns within a container but reset on redeploy. That's the main reason to prefer Supabase once you're running in production.
+
+### Cost on the Supabase free tier
+
+- ~150 bytes per row in either table; 10K predictions = 1.5MB; 10K remembered tickers = 1.5MB. Both stay well under the 500MB DB allowance for years.
+- Per analysis: 3 INSERTs to `predictions` (1w/1m/3m) + 1 UPSERT to `searched_tickers` (skipped for curated tickers) + 3 SELECTs for calibration + 1 SELECT for resolution + 1 SELECT for the dropdown render = ~9 REST calls. The free tier has no per-request cap (only egress: 5GB/month, irrelevant at our payload size).
 
 ---
 

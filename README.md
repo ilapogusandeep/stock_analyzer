@@ -114,10 +114,12 @@ streamlit run sidebar_web.py
 
 No API keys required for basic operation — yfinance + free RSS is enough. The dashboard runs with a local parquet prediction log at `data/predictions.parquet`.
 
-### Enable persistent prediction storage (recommended)
+### Enable persistent storage (recommended)
 
-1. Sign up at [supabase.com](https://supabase.com) (free tier is plenty)
-2. Run [`migrations/001_predictions.sql`](migrations/001_predictions.sql) in Supabase SQL Editor
+1. Sign up at [supabase.com](https://supabase.com) (free tier is plenty — 500MB DB, no card)
+2. In Supabase SQL Editor, run **both** migrations in order:
+   - [`migrations/001_predictions.sql`](migrations/001_predictions.sql) — track-record table for the AI panels' calibration loop
+   - [`migrations/002_searched_tickers.sql`](migrations/002_searched_tickers.sql) — autocomplete cache for non-SEC tickers (crypto, indices, forex, foreign ADRs)
 3. Grab your Project URL + publishable/anon key from Project Settings → API
 4. Add to `.streamlit/secrets.toml` (or Streamlit Cloud app secrets):
 
@@ -126,7 +128,7 @@ No API keys required for basic operation — yfinance + free RSS is enough. The 
    SUPABASE_KEY = "sb_publishable_..."
    ```
 
-Without Supabase the app works fine but the Track Record resets on every redeploy (parquet is on ephemeral FS).
+Without Supabase the app still works — predictions and remembered tickers fall back to local files (`data/predictions.parquet` and `data/searched_tickers.json`). The catch is that Streamlit Cloud's filesystem is ephemeral, so both reset on every redeploy.
 
 ### Run tests
 

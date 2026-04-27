@@ -25,10 +25,18 @@ from stockiq.data.tickers import (
 
 @pytest.fixture
 def isolated_searched(tmp_path, monkeypatch):
-    """Point _SEARCHED_PATH at a tmp file so tests don't pollute the
-    repo's data/ directory or stomp on each other."""
+    """Point _SEARCHED_PATH at a tmp file and clear Supabase env so
+    tests exercise the file backend in isolation. Otherwise the test
+    runner's environment could leak SUPABASE_URL and silently route
+    writes to a real database."""
     fake = tmp_path / "searched.json"
     monkeypatch.setattr(tickers_module, "_SEARCHED_PATH", fake)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_KEY", raising=False)
+    # Also block st.secrets fallback in case streamlit is importable.
+    monkeypatch.setattr(
+        tickers_module, "_supabase_creds", lambda: (None, None)
+    )
     return fake
 
 
@@ -97,3 +105,58 @@ def test_get_all_tickers_offline_mode(isolated_searched):
         fetcher.assert_not_called()
     # Still includes POPULAR
     assert merged.get("AAPL") == "Apple Inc."
+
+
+# ---------------------------------------------------------------------------
+# Supabase backend dispatch
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def supabase_creds(monkeypatch):
+    """Pretend Supabase is configured. Backed by mocked requests so no
+    HTTP traffic actually happens."""
+    monkeypatch.setattr(
+        tickers_module,
+        "_supabase_creds",
+        lambda: ("https://fake.supabase.co", "sb_publishable_fake"),
+    )
+
+
+def test_remember_supabase_path_used_when_configured(supabase_creds):
+    """When credentials exist, remember_ticker should hit the Supabase
+    helper, not write the local file."""
+    with mock.patch.object(
+        tickers_module, "_remember_supabase", return_value=True
+    ) as sb, mock.patch.object(tickers_module, "_remember_file") as fs:
+        remember_ticker("BTC-USD", "Bitcoin USD")
+    sb.assert_called_once_with(
+        "https://fake.supabase.co", "sb_publishable_fake",
+        "BTC-USD", "Bitcoin USD",
+    )
+    fs.assert_not_called()
+
+
+def test_remember_supabase_failure_falls_back_to_file(supabase_creds, tmp_path, monkeypatch):
+    """If Supabase upsert fails, write to the local JSON so the ticker
+    is still cached for this container's lifetime."""
+    fake = tmp_path / "searched.json"
+    monkeypatch.setattr(tickers_module, "_SEARCHED_PATH", fake)
+    with mock.patch.object(
+        tickers_module, "_remember_supabase", return_value=False
+    ):
+        remember_ticker("BTC-USD", "Bitcoin USD")
+    assert fake.exists()
+    data = json.loads(fake.read_text())
+    assert data == {"BTC-USD": "Bitcoin USD"}
+
+
+def test_load_supabase_path_used_when_configured(supabase_creds):
+    """_load_searched should call Supabase, not read the local file."""
+    expected = {"BTC-USD": "Bitcoin USD", "ETH-USD": "Ethereum USD"}
+    with mock.patch.object(
+        tickers_module, "_load_searched_supabase", return_value=expected
+    ) as sb, mock.patch.object(tickers_module, "_load_searched_file") as fs:
+        result = tickers_module._load_searched()
+    sb.assert_called_once()
+    fs.assert_not_called()
+    assert result == expected
