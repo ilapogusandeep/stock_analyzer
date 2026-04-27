@@ -88,6 +88,32 @@ DENSE_DARK_CSS = """
   .topbar [data-testid="stCheckbox"] { margin-top: 20px; }
   .topbar [data-testid="stCheckbox"] label > div:last-child { color: #cbd5e1 !important; }
 
+  /* ===== Streamlit secondary buttons (Scanner add / refresh / remove) =====
+     Scope: every kind="secondary" button. Primary buttons (Analyze CTA)
+     are matched by [kind="primary"] so they keep their red pill. The
+     Recent-search pills aren't stButtons (they're HTML anchors), so
+     they're untouched.   */
+  [data-testid="stButton"] > button[kind="secondary"] {
+      background: rgba(148,163,255,0.06) !important;
+      border: 1px solid rgba(148,163,255,0.20) !important;
+      border-radius: 10px !important;
+      padding: 4px 12px !important;
+      color: #e6ebff !important;
+      font-weight: 600 !important;
+      font-size: 0.78rem !important;
+      transition: all 0.12s ease;
+      min-height: 32px !important;
+      height: auto !important;
+  }
+  [data-testid="stButton"] > button[kind="secondary"]:hover {
+      background: rgba(148,163,255,0.12) !important;
+      border-color: rgba(148,163,255,0.40) !important;
+      color: #fff !important;
+  }
+  [data-testid="stButton"] > button[kind="secondary"]:active {
+      transform: translateY(1px);
+  }
+
   /* ===== Recent-search pills (clickable HTML anchors, not stButton) ===== */
   .rs-pill {
       display: inline-flex;

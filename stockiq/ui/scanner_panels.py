@@ -49,6 +49,68 @@ def _ticker_exists(ticker: str) -> bool:
         return False
 
 
+def _resolve_to_ticker(user_input: str) -> str | None:
+    """Resolve free-text input to a real ticker symbol.
+
+    Order of attempts:
+      1. Already a ticker in our merged universe (POPULAR + SEC +
+         searched)? Use it.
+      2. yfinance accepts the upper-cased input directly? Use it.
+      3. Fuzzy match the input against company names in the merged
+         universe (case-insensitive substring + word-boundary).
+         Return the unique match, or None if zero or ambiguous.
+    """
+    if not user_input:
+        return None
+    raw = user_input.strip()
+    upper = raw.upper()
+    if not raw:
+        return None
+
+    try:
+        from stockiq.data.tickers import get_all_tickers
+        universe = get_all_tickers()
+    except Exception:
+        universe = {}
+
+    # Case 1: already a known ticker
+    if upper in universe:
+        return upper
+
+    # Case 2: yfinance recognizes it (handles tickers we don't carry,
+    # e.g. exotic foreign symbols)
+    if _ticker_exists(upper):
+        return upper
+
+    # Case 3: company-name fuzzy match. Prefer exact-ish matches; allow
+    # one ambiguous case to fail loudly.
+    needle = raw.lower()
+    word_matches: list[str] = []
+    sub_matches: list[str] = []
+    for tkr, name in universe.items():
+        if not name:
+            continue
+        nm_lower = name.lower()
+        if nm_lower == needle:
+            return tkr
+        # Word-boundary match: input is the start of a word in the name.
+        # Cheap and avoids matching "ai" -> every "...ai..." substring.
+        if any(w.startswith(needle) for w in nm_lower.split()):
+            word_matches.append(tkr)
+        elif needle in nm_lower:
+            sub_matches.append(tkr)
+
+    if len(word_matches) == 1:
+        return word_matches[0]
+    if not word_matches and len(sub_matches) == 1:
+        return sub_matches[0]
+    # Multiple word matches -- prefer the shortest ticker (often the
+    # primary listing rather than a class-B share or wholly-owned sub).
+    if word_matches:
+        return min(word_matches, key=len)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Scanner table — shared by watchlist and universe sections
 # ---------------------------------------------------------------------------
@@ -154,6 +216,7 @@ def render_watchlist_section(
 
     # Per-ticker remove buttons -- Streamlit-native, so they can't live
     # inside the HTML grid above. Rendered as a compact row beneath.
+    invalid_tickers = [r["ticker"] for r in rows if r.get("price") is None]
     if rows:
         cols = st.columns(min(len(rows), 8) or 1)
         for i, r in enumerate(rows):
@@ -165,6 +228,19 @@ def render_watchlist_section(
                 ):
                     remove_callback(r["ticker"])
                     st.rerun()
+
+    # Bulk-remove all rows that came back without price data (typo'd
+    # tickers, delisted symbols, etc.). Only render when there's
+    # actually something to clean.
+    if invalid_tickers:
+        if st.button(
+            f"🧹 Clean up {len(invalid_tickers)} invalid",
+            key="wl_clean_btn",
+            help="Remove every watchlist row whose symbol returned no price data",
+        ):
+            for tkr in invalid_tickers:
+                remove_callback(tkr)
+            st.rerun()
 
     # Add input + Add button + Refresh button laid out in one row.
     add_col, btn_col, refresh_col = st.columns([0.55, 0.20, 0.25])
@@ -178,16 +254,21 @@ def render_watchlist_section(
     with btn_col:
         if st.button("➕ Add", key="wl_add_btn", width="stretch"):
             if new_ticker:
-                if _ticker_exists(new_ticker):
-                    add_callback(new_ticker)
+                resolved = _resolve_to_ticker(new_ticker)
+                if resolved:
+                    if resolved.upper() != new_ticker.strip().upper():
+                        st.toast(
+                            f"Resolved '{new_ticker}' → {resolved}",
+                            icon="✅",
+                        )
+                    add_callback(resolved)
                     st.session_state.pop("wl_add_input", None)
                     st.rerun()
                 else:
                     st.error(
-                        f"Couldn't find ticker '{new_ticker.upper()}'. "
-                        "Check the symbol — yfinance uses '-USD' suffixes "
-                        "for crypto (BTC-USD), '^' prefixes for indices "
-                        "(^GSPC), and '=X' suffixes for forex (EURUSD=X)."
+                        f"Couldn't resolve '{new_ticker}' to a ticker. "
+                        "Try a full symbol — '-USD' for crypto (BTC-USD), "
+                        "'^' for indices (^GSPC), '=X' for forex (EURUSD=X)."
                     )
     with refresh_col:
         if st.button("🔄 Refresh signals", key="wl_refresh_btn", width="stretch"):
