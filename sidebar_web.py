@@ -227,7 +227,7 @@ if "Scanner" in view:
                           text=f"Scanning universe ({i+1}/{len(universe)})")
     progress.empty()
 
-    uni_top = rank_signals(uni_rows)[:15]
+    uni_top = rank_signals(uni_rows)[:30]
     uni_last_min = (_time.time() - uni_bust) / 60.0 if uni_bust else None
 
     # Side-by-side layout — watchlist (left) + top movers (right). Each

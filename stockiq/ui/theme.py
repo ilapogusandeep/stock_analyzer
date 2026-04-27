@@ -161,7 +161,12 @@ DENSE_DARK_CSS = """
       color: #cbd5e1 !important;
   }
 
-  /* ===== Scanner grid (watchlist + universe tables) ===== */
+  /* ===== Scanner grid (watchlist + universe tables) =====
+     `max-height` caps the visible rows; rows beyond scroll vertically.
+     The header cells use position:sticky so they stay pinned at the
+     top while rows scroll underneath. The opaque sticky bg has to match
+     the panel's effective fill (page-dark + panel's 0.025 white wash)
+     so scrolling rows don't show through the headers. */
   .sc-grid {
       display: grid;
       column-gap: 8px;
@@ -170,15 +175,30 @@ DENSE_DARK_CSS = """
       font-size: 0.78rem;
       font-variant-numeric: tabular-nums;
       margin: 4px 0;
+      max-height: 520px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148,163,255,0.30) transparent;
   }
+  .sc-grid::-webkit-scrollbar { width: 6px; }
+  .sc-grid::-webkit-scrollbar-thumb {
+      background: rgba(148,163,255,0.25);
+      border-radius: 3px;
+  }
+  .sc-grid::-webkit-scrollbar-thumb:hover { background: rgba(148,163,255,0.45); }
   .sc-th {
       color: #94a3b8;
       font-size: 0.65rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       font-weight: 700;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(148,163,255,0.10);
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(148,163,255,0.18);
+      background: #14182a;
+      position: sticky;
+      top: 0;
+      z-index: 2;
   }
   .sc-td {
       color: #e6ebff;
