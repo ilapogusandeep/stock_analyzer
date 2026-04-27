@@ -154,12 +154,6 @@ DENSE_DARK_CSS = """
       padding: 6px 0;
       border-bottom: 1px dashed rgba(148,163,255,0.06);
   }
-  .sc-row {
-      display: contents; /* let children participate in the parent grid */
-  }
-  .sc-row:hover .sc-td {
-      background: rgba(148,163,255,0.04);
-  }
   .sc-score {
       color: #fbbf24;
       font-weight: 700;

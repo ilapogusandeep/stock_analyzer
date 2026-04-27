@@ -48,40 +48,26 @@ SCANNER_HEADERS = [
 ]
 
 
-def render_scanner_table(rows: Iterable[dict], remove_callback=None) -> None:
-    """Render a scanner result row set as an HTML grid.
-
-    ``remove_callback`` (optional) — when provided, a small × button is
-    rendered at the end of each row that calls remove_callback(ticker)
-    and reruns. Used for the watchlist; the universe section omits it.
-
-    Rows are also clickable: ticker pill links to ?ticker=<sym> which
-    the top-of-script handler uses to swap the analyze view.
-    """
-    rows = list(rows)
+def _scanner_grid_html(rows: list[dict]) -> str:
+    """Build the inner grid HTML for a scanner result set. Returns a
+    string (caller embeds inside panel_open/panel_close in a single
+    st.markdown call so Streamlit doesn't break the grid by wrapping
+    each markdown invocation in its own container)."""
     if not rows:
-        st.markdown(
-            '<div class="sent-label">No tickers to scan yet.</div>',
-            unsafe_allow_html=True,
-        )
-        return
+        return '<div class="sent-label">No tickers to scan yet.</div>'
 
-    # Column header row
-    header_cells = "".join(
-        f'<div class="sc-th">{label}</div>' for _, label in SCANNER_HEADERS
-    )
-    if remove_callback is not None:
-        header_cells += '<div class="sc-th"></div>'  # × column
+    parts: list[str] = []
+    # Header row -- 8 cells matching SCANNER_HEADERS
+    for _, label in SCANNER_HEADERS:
+        parts.append(f'<div class="sc-th">{label}</div>')
 
-    body = ""
+    # Data rows -- 8 cells each, flat under the grid (no .sc-row wrapper).
     for r in rows:
         ticker = r.get("ticker", "—")
-
         price = r.get("price")
         chg = r.get("change_1d")
         chg_cls = _cls(chg) if chg is not None else "flat"
         chg_str = fmt_pct(chg * 100, decimals=2) if chg is not None else "—"
-
         unusual = r.get("unusual_count", 0) or 0
         agg = r.get("aggressor_net", 0) or 0
         agg_cls = _cls(agg) if agg else "flat"
@@ -89,47 +75,29 @@ def render_scanner_table(rows: Iterable[dict], remove_callback=None) -> None:
         score = r.get("score") or 0
         bias = r.get("bias", "NEUTRAL")
 
-        cells = [
-            f'<a class="rs-pill" href="?ticker={ticker}" target="_self">{ticker}</a>',
-            _fmt_price(price),
-            f'<span class="{chg_cls}">{chg_str}</span>',
-            str(unusual),
-            f'<span class="{agg_cls}">{_fmt_signed(agg)}</span>',
-            f"{velocity:.1f}×",
-            f'<span class="sc-score">{score:.0f}</span>',
-            _bias_pill(bias),
-        ]
-        row_html = "".join(f'<div class="sc-td">{c}</div>' for c in cells)
-        if remove_callback is not None:
-            row_html += '<div class="sc-td sc-rm-cell"></div>'
-        body += f'<div class="sc-row">{row_html}</div>'
+        parts.append(
+            f'<div class="sc-td"><a class="rs-pill" href="?ticker={ticker}" '
+            f'target="_self">{ticker}</a></div>'
+        )
+        parts.append(f'<div class="sc-td">{_fmt_price(price)}</div>')
+        parts.append(
+            f'<div class="sc-td"><span class="{chg_cls}">{chg_str}</span></div>'
+        )
+        parts.append(f'<div class="sc-td">{unusual}</div>')
+        parts.append(
+            f'<div class="sc-td"><span class="{agg_cls}">{_fmt_signed(agg)}</span></div>'
+        )
+        parts.append(f'<div class="sc-td">{velocity:.1f}×</div>')
+        parts.append(
+            f'<div class="sc-td"><span class="sc-score">{score:.0f}</span></div>'
+        )
+        parts.append(f'<div class="sc-td">{_bias_pill(bias)}</div>')
 
-    cols_count = len(SCANNER_HEADERS) + (1 if remove_callback is not None else 0)
-    grid_template = (
-        "60px 70px 64px 64px 64px 60px 50px 80px"
-        + (" 28px" if remove_callback is not None else "")
-    )
-    st.markdown(
+    grid_template = "60px 70px 64px 64px 64px 60px 50px 80px"
+    return (
         f'<div class="sc-grid" style="grid-template-columns: {grid_template};">'
-        f'{header_cells}{body}</div>',
-        unsafe_allow_html=True,
+        + "".join(parts) + '</div>'
     )
-
-    # Remove buttons rendered as a parallel block underneath -- Streamlit
-    # buttons can't live inside an arbitrary HTML grid, so we surface
-    # the removal control as a row of small × buttons keyed to the
-    # ticker order. Compact and works.
-    if remove_callback is not None:
-        cols = st.columns(min(len(rows), 10) or 1)
-        for i, r in enumerate(rows):
-            with cols[i % 10]:
-                if st.button(
-                    f"× {r['ticker']}",
-                    key=f"rm_{r['ticker']}",
-                    help=f"Remove {r['ticker']} from watchlist",
-                ):
-                    remove_callback(r["ticker"])
-                    st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -149,9 +117,29 @@ def render_watchlist_section(
         else f"{len(rows)} tickers"
     )
 
-    st.markdown(panel_open("Watchlist", sub), unsafe_allow_html=True)
-    render_scanner_table(rows, remove_callback=remove_callback)
-    st.markdown(panel_close(), unsafe_allow_html=True)
+    # Emit the full panel (open + grid + close) in ONE st.markdown call;
+    # splitting these across separate calls makes Streamlit wrap each in
+    # its own container which kills the CSS grid layout.
+    st.markdown(
+        panel_open("Watchlist", sub)
+        + _scanner_grid_html(rows)
+        + panel_close(),
+        unsafe_allow_html=True,
+    )
+
+    # Per-ticker remove buttons -- Streamlit-native, so they can't live
+    # inside the HTML grid above. Rendered as a compact row beneath.
+    if rows:
+        cols = st.columns(min(len(rows), 8) or 1)
+        for i, r in enumerate(rows):
+            with cols[i % 8]:
+                if st.button(
+                    f"× {r['ticker']}",
+                    key=f"wl_rm_{r['ticker']}",
+                    help=f"Remove {r['ticker']} from watchlist",
+                ):
+                    remove_callback(r["ticker"])
+                    st.rerun()
 
     # Add input + Add button + Refresh button laid out in one row.
     add_col, btn_col, refresh_col = st.columns([0.55, 0.20, 0.25])
@@ -184,9 +172,13 @@ def render_universe_section(
         if last_refreshed_min is not None
         else f"top {len(rows)} of {universe_size}"
     )
-    st.markdown(panel_open("Top movers (curated universe)", sub), unsafe_allow_html=True)
-    render_scanner_table(rows, remove_callback=None)
-    st.markdown(panel_close(), unsafe_allow_html=True)
+    # Same single-st.markdown pattern as the watchlist section.
+    st.markdown(
+        panel_open("Top movers (curated universe)", sub)
+        + _scanner_grid_html(rows)
+        + panel_close(),
+        unsafe_allow_html=True,
+    )
 
     if st.button("🔄 Refresh scan", key="universe_refresh_btn"):
         st.session_state["universe_force_refresh"] = True
