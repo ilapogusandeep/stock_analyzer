@@ -243,6 +243,28 @@ if "Scanner" in view:
         )
     with sc_right:
         render_universe_section(uni_top, uni_last_min, len(universe))
+
+    # Upcoming earnings strip — full-width band below the side-by-side
+    # tables. Pulls next-7-day prints for watchlist ∪ curated "famous"
+    # universe (SCAN_CORE_TICKERS). The calendar helper filters out
+    # ETFs/indexes/forex/crypto before hitting yfinance so we don't
+    # spam logs with "no earnings dates" warnings for SPY, DIA, ^VIX,
+    # etc. Renders nothing on empty input so the page collapses
+    # cleanly. Per-ticker @st.cache_data ttl=86400 keeps day-2+ runs
+    # free of yfinance cost.
+    try:
+        from stockiq.data.earnings_calendar import get_upcoming_earnings
+        from stockiq.scanner.universe import SCAN_CORE_TICKERS
+        from stockiq.ui.components import earnings_strip_block
+
+        _earn_tickers = list(dict.fromkeys(
+            [t.upper() for t in (wl_tickers + SCAN_CORE_TICKERS) if t]
+        ))
+        _earn_rows = get_upcoming_earnings(tuple(_earn_tickers), days_ahead=7)
+        earnings_strip_block(_earn_rows)
+    except Exception:
+        pass
+
     st.stop()
 
 
@@ -801,33 +823,6 @@ with c_right:
     # Track record stays in Supabase but is no longer surfaced here —
     # the data drives backend confidence calibration instead of being a
     # passive readout.
-
-
-# ---------------------------------------------------------------------------
-# Upcoming earnings strip — full-width band below the 4 columns. Pulls
-# next-7-day earnings for watchlist ∪ curated "famous" universe; renders
-# nothing when zero rows so the page collapses (no empty placeholder).
-# Each helper is @st.cache_data(ttl=86400) per ticker so day-2+ analyses
-# pay zero yfinance cost.
-# ---------------------------------------------------------------------------
-try:
-    from stockiq.data import watchlist as _wl_e
-    from stockiq.data.earnings_calendar import get_upcoming_earnings
-    from stockiq.scanner.universe import SCAN_CORE_TICKERS
-    from stockiq.ui.components import earnings_strip_block
-
-    _wl_tickers = []
-    try:
-        _wl_tickers = _wl_e.list_tickers()
-    except Exception:
-        pass
-    _earn_tickers = list(dict.fromkeys(
-        [t.upper() for t in (_wl_tickers + SCAN_CORE_TICKERS) if t]
-    ))
-    _earn_rows = get_upcoming_earnings(tuple(_earn_tickers), days_ahead=7)
-    earnings_strip_block(_earn_rows)
-except Exception:
-    pass
 
 
 st.markdown(

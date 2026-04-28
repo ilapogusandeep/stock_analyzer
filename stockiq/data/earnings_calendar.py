@@ -17,6 +17,41 @@ import pandas as pd
 import streamlit as st
 
 
+# yfinance logs a noisy "No earnings dates found, symbol may be
+# delisted" warning every time we ask for a non-equity (ETFs, indexes,
+# forex, crypto). Pre-filter so we never make those calls — these
+# instruments don't report earnings and we know it ahead of time.
+_NON_EQUITY_PREFIXES = ("^",)
+_NON_EQUITY_SUFFIXES = ("=X", "-USD", "-USDT")
+_KNOWN_NON_EQUITY = frozenset({
+    # Broad-market / index ETFs
+    "SPY", "QQQ", "DIA", "IWM", "VOO", "VTI", "VEA", "VWO", "EFA", "EEM",
+    "FXI", "ACWI", "MCHI",
+    # Sector ETFs (the same XL* list the analyzer uses for relative strength)
+    "XLK", "XLF", "XLV", "XLY", "XLP", "XLI", "XLE", "XLC", "XLU",
+    "XLRE", "XLB",
+    # Themed / leveraged ETFs that show up in SCAN_CORE_TICKERS or
+    # popular watchlists
+    "ARKK", "TQQQ", "SQQQ", "SOXX", "SOXL", "SMH", "XBI", "IBB",
+    "KBE", "KRE", "XHB", "ITA",
+    # Bond ETFs
+    "AGG", "BND", "TLT", "SHY", "SHV", "IEF", "TIP", "HYG", "LQD",
+    # Commodity ETFs
+    "GLD", "SLV", "USO", "UNG", "DBC", "PDBC",
+})
+
+
+def _is_non_equity(ticker: str) -> bool:
+    t = (ticker or "").strip().upper()
+    if not t:
+        return True
+    if t.startswith(_NON_EQUITY_PREFIXES):
+        return True
+    if any(t.endswith(suf) for suf in _NON_EQUITY_SUFFIXES):
+        return True
+    return t in _KNOWN_NON_EQUITY
+
+
 def _to_naive_date(value) -> Optional[date]:
     """Coerce any date-like input to a naive ``datetime.date``. Returns
     None when the input can't be interpreted (yfinance occasionally
@@ -44,7 +79,7 @@ def _next_earnings_for(ticker: str) -> Optional[dict]:
     print, or None when yfinance has no upcoming date for the symbol.
     Cached for 24h since earnings dates don't move intraday."""
     ticker = ticker.strip().upper()
-    if not ticker:
+    if not ticker or _is_non_equity(ticker):
         return None
     try:
         import yfinance as yf
