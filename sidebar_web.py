@@ -803,6 +803,33 @@ with c_right:
     # passive readout.
 
 
+# ---------------------------------------------------------------------------
+# Upcoming earnings strip — full-width band below the 4 columns. Pulls
+# next-7-day earnings for watchlist ∪ curated "famous" universe; renders
+# nothing when zero rows so the page collapses (no empty placeholder).
+# Each helper is @st.cache_data(ttl=86400) per ticker so day-2+ analyses
+# pay zero yfinance cost.
+# ---------------------------------------------------------------------------
+try:
+    from stockiq.data import watchlist as _wl_e
+    from stockiq.data.earnings_calendar import get_upcoming_earnings
+    from stockiq.scanner.universe import SCAN_CORE_TICKERS
+    from stockiq.ui.components import earnings_strip_block
+
+    _wl_tickers = []
+    try:
+        _wl_tickers = _wl_e.list_tickers()
+    except Exception:
+        pass
+    _earn_tickers = list(dict.fromkeys(
+        [t.upper() for t in (_wl_tickers + SCAN_CORE_TICKERS) if t]
+    ))
+    _earn_rows = get_upcoming_earnings(tuple(_earn_tickers), days_ahead=7)
+    earnings_strip_block(_earn_rows)
+except Exception:
+    pass
+
+
 st.markdown(
     '<div class="footer">StockIQ · data via yfinance + RSS news · '
     'not investment advice</div>',

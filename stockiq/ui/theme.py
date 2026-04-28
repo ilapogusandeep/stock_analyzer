@@ -252,6 +252,76 @@ DENSE_DARK_CSS = """
   }
   .sc-rm:active { transform: scale(1.0); }
 
+  /* ===== Upcoming earnings strip (Analyze view, full-width bottom band) =====
+     Each card is a horizontal flex row with ticker → date → "in Nd"
+     pill. Wraps to multiple rows on narrow viewports; cards stay
+     compact so a typical 7-day window (~10–15 cards) fits in one row
+     on a 1500px viewport. */
+  .earn-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 4px 0;
+  }
+  .earn-card {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: linear-gradient(180deg, rgba(99,102,241,0.10), rgba(99,102,241,0.04));
+      border: 1px solid rgba(129,140,248,0.30);
+      border-radius: 8px;
+      color: #e6ebff !important;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-decoration: none !important;
+      font-variant-numeric: tabular-nums;
+      transition: all 0.15s ease;
+  }
+  .earn-card:hover {
+      background: linear-gradient(180deg, rgba(99,102,241,0.22), rgba(99,102,241,0.10));
+      border-color: rgba(129,140,248,0.65);
+      color: #ffffff !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99,102,241,0.20);
+  }
+  .earn-card .earn-tkr {
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: #c7d2fe;
+  }
+  .earn-card .earn-date {
+      color: #cbd5e1;
+      font-size: 0.72rem;
+  }
+  .earn-card .earn-today,
+  .earn-card .earn-soon,
+  .earn-card .earn-later {
+      padding: 1px 6px;
+      border-radius: 6px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+  }
+  .earn-card .earn-today {
+      background: rgba(239,68,68,0.20);
+      color: #fca5a5;
+  }
+  .earn-card .earn-soon {
+      background: rgba(234,179,8,0.18);
+      color: #fde68a;
+  }
+  .earn-card .earn-later {
+      background: rgba(148,163,255,0.14);
+      color: #c7d2fe;
+  }
+  .earn-card .earn-eps {
+      color: #94a3b8;
+      font-size: 0.68rem;
+      font-weight: 500;
+  }
+
   /* ===== Header band ===== */
   .hb {
       display: grid;

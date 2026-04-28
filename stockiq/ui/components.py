@@ -860,3 +860,67 @@ def performance_strip(tech: dict) -> None:
     embed pills inside another panel's header.
     """
     st.markdown(performance_pills_html(tech), unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# Upcoming earnings strip (Analyze view, full-width band below the columns)
+# ---------------------------------------------------------------------------
+
+_DAY_ABBREV = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri", 5: "Sat", 6: "Sun"}
+
+
+def earnings_strip_block(rows: list[dict]) -> None:
+    """Full-width horizontal strip of upcoming-earnings cards.
+
+    Each row dict needs ``ticker``, ``date`` (datetime.date), and
+    ``days_to`` (int). Optional ``est_eps``. Caller should pass an
+    empty list to skip the panel entirely; this renders nothing on
+    empty input so the page just collapses the strip.
+    """
+    if not rows:
+        return
+
+    cards = []
+    for r in rows:
+        tkr = r.get("ticker", "")
+        d = r.get("date")
+        if not tkr or d is None:
+            continue
+        days_to = r.get("days_to", 0)
+        # Day-of-week label + numeric date. Months are 1-indexed; show
+        # M/D rather than YYYY-MM-DD because the strip is space-tight
+        # and the year is implicit (always within 7 days).
+        try:
+            dow = _DAY_ABBREV.get(d.weekday(), "")
+            date_str = f"{d.month}/{d.day}"
+        except Exception:
+            continue
+        if days_to == 0:
+            when = "today"
+            when_cls = "earn-today"
+        elif days_to == 1:
+            when = "tomorrow"
+            when_cls = "earn-soon"
+        else:
+            when = f"in {days_to}d"
+            when_cls = "earn-soon" if days_to <= 3 else "earn-later"
+        eps = r.get("est_eps")
+        eps_str = (f'<span class="earn-eps">est ${eps:.2f}</span>'
+                   if isinstance(eps, (int, float)) else "")
+        cards.append(
+            f'<a class="earn-card" href="?ticker={tkr}" target="_self" '
+            f'title="Earnings {date_str} ({when})">'
+            f'<span class="earn-tkr">{tkr}</span>'
+            f'<span class="earn-date">{dow} {date_str}</span>'
+            f'<span class="{when_cls}">{when}</span>'
+            f'{eps_str}'
+            f'</a>'
+        )
+    if not cards:
+        return
+    body = '<div class="earn-strip">' + "".join(cards) + '</div>'
+    st.markdown(
+        panel_open("Upcoming earnings", f"next 7 days · {len(cards)} names")
+        + body + panel_close(),
+        unsafe_allow_html=True,
+    )
