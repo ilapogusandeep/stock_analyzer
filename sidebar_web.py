@@ -253,6 +253,7 @@ if "Scanner" in view:
     # of yfinance cost; the first cold load on a fresh deploy can take
     # ~30s for ~50 tickers, so we wrap the call in a spinner.
     try:
+        import sys as _sys
         from stockiq.data.earnings_calendar import get_upcoming_earnings
         from stockiq.scanner.universe import SCAN_CORE_TICKERS
         from stockiq.ui.components import earnings_strip_block
@@ -260,23 +261,27 @@ if "Scanner" in view:
         _earn_tickers = list(dict.fromkeys(
             [t.upper() for t in (wl_tickers + SCAN_CORE_TICKERS) if t]
         ))
+        # Use stderr + flush so the line lands in Streamlit Cloud logs
+        # even when stdout is buffered or captured by a third-party hook.
+        _sys.stderr.write(
+            f"📅 Scanner earnings: fetching for {len(_earn_tickers)} tickers\n"
+        )
+        _sys.stderr.flush()
         with st.spinner("Scanning upcoming earnings…"):
             _earn_rows = get_upcoming_earnings(
                 tuple(_earn_tickers), days_ahead=7,
             )
-        # Surface the result count to stdout so it shows in Streamlit
-        # Cloud deploy logs — useful when the strip looks empty and we
-        # want to know whether yfinance rate-limited or there really
-        # were zero prints in the window.
-        print(
-            f"📅 Earnings strip: {len(_earn_rows)} prints in next 7 days "
-            f"across {len(_earn_tickers)} tickers"
+        _sys.stderr.write(
+            f"📅 Scanner earnings: {len(_earn_rows)} prints in next 7 days\n"
         )
+        _sys.stderr.flush()
         earnings_strip_block(_earn_rows)
     except Exception as _earn_err:
         # Don't crash the Scanner page on calendar failure — log it so
         # we can see the cause in Cloud logs and move on.
-        print(f"⚠️ Earnings strip failed: {_earn_err!r}")
+        import sys as _sys
+        _sys.stderr.write(f"⚠️ Earnings strip failed: {_earn_err!r}\n")
+        _sys.stderr.flush()
 
     st.stop()
 

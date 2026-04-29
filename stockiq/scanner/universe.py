@@ -34,7 +34,7 @@ SCAN_CORE_TICKERS = [
     # Memes / volatility
     "GME", "AMC",
     # ETFs
-    "SPY", "QQQ", "IWM", "DIA", "VIX",
+    "SPY", "QQQ", "IWM", "DIA",
 ]
 
 
