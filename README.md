@@ -114,7 +114,7 @@ User-curated list of tickers persisted to Supabase (`watchlist` table) so it sur
 |---|---|
 | Price + 1-day Δ | spot move |
 | Unusual options count | strikes with V/OI ≥ 2× across the next 3 expiries |
-| Aggressor net | sum of +1 for BUY / -1 for SELL across unusual rows (bid-ask heuristic) |
+| Aggressor net | direction-aware sum across unusual rows: BUY-CALL or SELL-PUT = **+1** (bullish), SELL-CALL or BUY-PUT = **−1** (bearish), MID = 0. Pairing aggressor with option type matters — heavy put-buying is bearish, not bullish, even though every row says "BUY" |
 | News velocity | today's article count vs 7-day trailing avg per ticker |
 | Composite score | 0–100 weighted blend, clamped per-axis at 25 so no single dimension dominates |
 | Bias | BULLISH / NEUTRAL / BEARISH from aggressor + change_1d agreement |

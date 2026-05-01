@@ -87,14 +87,35 @@ def _news_velocity(items: list[dict]) -> dict:
 
 
 def _aggressor_net(rows: list[dict]) -> int:
-    """Sum of +1 BUY, -1 SELL, 0 MID across unusual rows."""
+    """Direction-aware net options flow.
+
+    Each unusual row's directional sign is set by *both* the aggressor
+    side (bid-ask heuristic) AND the option type:
+
+        BUY  CALL → +1  (long upside — bullish)
+        SELL PUT  → +1  (short downside — bullish)
+        SELL CALL → -1  (short upside — bearish)
+        BUY  PUT  → -1  (long downside — bearish)
+        MID / —   →  0  (inconclusive)
+
+    Without pairing aggressor with option type, heavy put-buying
+    falsely registers as bullish (because aggressor=BUY). e.g. a row
+    with five PUT BUYs and one CALL SELL — clearly bearish flow —
+    would score +4 with a naive sum.
+    """
     score = 0
     for r in rows:
         agg = (r.get("aggressor") or "").upper()
-        if agg == "BUY":
+        side = (r.get("side") or "").upper()  # "CALL" or "PUT"
+        if agg == "BUY" and side == "CALL":
             score += 1
-        elif agg == "SELL":
+        elif agg == "SELL" and side == "PUT":
+            score += 1
+        elif agg == "SELL" and side == "CALL":
             score -= 1
+        elif agg == "BUY" and side == "PUT":
+            score -= 1
+        # MID / unknown side: contributes nothing
     return score
 
 

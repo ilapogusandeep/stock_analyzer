@@ -35,6 +35,7 @@ No API keys, no network, no Supabase required for any test.
 | `test_watchlist.py` | `stockiq.data.watchlist` add/remove/list round-trip + Supabase ↔ file backend dispatch (and Supabase-failure-falls-back) | The Scanner view's watchlist is the user-curated focus list; broken persistence loses their selections silently |
 | `test_scanner_scorer.py` | `score_signal` math: zero / max / clamped components, bias derivation from aggressor + change_1d, `rank_signals` ordering | Scoring drives "Top movers" ranking — a bug here would surface false alerts at the top |
 | `test_scanner_universe.py` | `get_scan_universe` union-of-sources, dedupe-preserves-first-occurrence, recent-search cap, max-total cap, uppercase normalization | The universe is what gets scanned; a bug here either bloats the scan past rate limits or shrinks it past usefulness |
+| `test_scanner_signals.py` | `_aggressor_net` direction-aware scoring: BUY-CALL / SELL-PUT = +1, SELL-CALL / BUY-PUT = −1, MID = 0. Pins the SNOW-style "5 PUT BUYs + 1 CALL SELL" case at −6 (was +4 with the naive sum) | The bias pill in every Scanner row is downstream of this — getting the directional sign wrong here flipped bullish vs bearish across the whole table |
 
 ---
 
