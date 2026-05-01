@@ -139,8 +139,24 @@ with tb_tkr:
 with tb_fast:
     fast = st.checkbox("Fast mode", value=False,
                        help="Skip ML + backtest")
+def _force_analyze_view() -> None:
+    """Snap the View radio back to Analyze when the Analyze button is
+    clicked from the Scanner page. Mutating ``st.session_state["view_select"]``
+    after the radio has rendered raises StreamlitAPIException, so we do
+    it in an on_click callback — Streamlit runs the callback BEFORE the
+    next rerun, so the radio picks up the new value when it's
+    reconstructed."""
+    if "Scanner" in st.session_state.get("view_select", ""):
+        st.session_state["view_select"] = "📊 Analyze"
+
+
 with tb_run:
-    run = st.button("Analyze", type="primary", width="stretch")
+    run = st.button(
+        "Analyze",
+        type="primary",
+        width="stretch",
+        on_click=_force_analyze_view,
+    )
 with tb_spacer:
     view = st.radio(
         "View",
@@ -150,13 +166,6 @@ with tb_spacer:
         key="view_select",
     )
 st.markdown('</div>', unsafe_allow_html=True)
-
-# A click on Analyze should always force us into Analyze view even if
-# the user was last on Scanner — the Run button is meaningless on the
-# Scanner page, so treat it as a view switch.
-if run and "Scanner" in view:
-    st.session_state["view_select"] = "📊 Analyze"
-    st.rerun()
 
 
 # Auto-analyze on selection change: once the user has run analysis at
