@@ -16,18 +16,25 @@ flowchart LR
     classDef passthrough fill:#0f172a,stroke:#334155,color:#94a3b8,stroke-dasharray:3 3
 
     User((User browser)):::ui
-    Streamlit[Streamlit Cloud<br/>sidebar_web.py]:::ui
+    Streamlit[Streamlit Cloud<br/>sidebar_web.py<br/>radio: Analyze · Scanner]:::ui
     Analyzer[UniversalStockAnalyzer<br/>stockiq.core.analyzer]:::core
 
     Collector[EnhancedDataCollector<br/>stockiq.data.collector]:::data
     Inst[EnhancedInstitutionalData<br/>stockiq.data.institutional]:::data
     Options[Options module<br/>stockiq.data.options]:::data
     Tickers[Ticker universe<br/>POPULAR + SEC + searched<br/>stockiq.data.tickers]:::data
+    Watchlist[Scanner watchlist<br/>stockiq.data.watchlist]:::data
+    EarnCal[Earnings calendar<br/>next-7-day per-ticker lookup<br/>stockiq.data.earnings_calendar]:::data
+
+    Signals[Per-ticker signals<br/>stockiq.scanner.signals]:::core
+    Universe[Curated + watchlist + recent<br/>stockiq.scanner.universe]:::core
+    Scorer[Composite score + bias<br/>stockiq.scanner.scorer]:::core
 
     ML[ML pipeline<br/>RF + GB ensemble<br/>5d · 21d · 63d horizons]:::core
     PredLog[PredictionLog<br/>stockiq.core.prediction_log]:::core
 
-    Components[UI components<br/>stockiq.ui.components]:::ui
+    Components[Analyze UI components<br/>stockiq.ui.components]:::ui
+    ScannerPanels[Scanner UI components<br/>stockiq.ui.scanner_panels]:::ui
     Theme[Dark theme CSS<br/>stockiq.ui.theme]:::ui
 
     YFPrices[yfinance core<br/>prices · info · options · 13F · earnings]:::external
@@ -37,9 +44,10 @@ flowchart LR
     MWRSS[MarketWatch RSS<br/>aggregator]:::external
     SectorETF[Sector SPDRs<br/>XLK/XLF/XLV/...]:::external
     SECList[SEC company_tickers.json<br/>~10K US equities]:::external
-    Supabase[(Supabase<br/>predictions + searched_tickers tables)]:::store
+    Supabase[(Supabase<br/>predictions + searched_tickers + watchlist tables)]:::store
     Parquet[(data/predictions.parquet<br/>local fallback)]:::store
     SearchedFile[(data/searched_tickers.json<br/>local fallback)]:::store
+    WatchlistFile[(data/watchlist.json<br/>local fallback)]:::store
 
     Publishers[Publisher labels passed through:<br/>Motley Fool · Benzinga · IBD · MarketBeat<br/>Seeking Alpha · CNBC · Reuters · Zacks<br/>Barron's · Business Insider · MSN · TIKR<br/>StockStory · TradingKey · ...]:::passthrough
 
@@ -49,6 +57,12 @@ flowchart LR
     Streamlit --> Components
     Streamlit --> Theme
     Streamlit --> Tickers
+    Streamlit -->|Scanner branch| ScannerPanels
+    Streamlit -->|Scanner branch| Watchlist
+    Streamlit -->|Scanner branch| Universe
+    Streamlit -->|Scanner branch| Signals
+    Streamlit -->|Scanner branch| Scorer
+    Streamlit -->|Scanner branch| EarnCal
     Tickers -->|7-day cached fetch| SECList
     Tickers -.->|if SUPABASE_URL set| Supabase
     Tickers -.->|fallback| SearchedFile
@@ -65,6 +79,17 @@ flowchart LR
     Inst --> YFPrices
     Options --> YFPrices
 
+    Signals -->|price · options · news velocity| YFPrices
+    Signals -->|news count| GNews
+    Universe -->|inputs| Watchlist
+    Universe -->|inputs| Tickers
+    Scorer --> Signals
+    EarnCal -->|skip ETF/index/forex/crypto<br/>per-ticker @cache_data ttl=86400| YFPrices
+    EarnCal --> ScannerPanels
+    Scorer --> ScannerPanels
+    Watchlist -.->|if SUPABASE_URL set| Supabase
+    Watchlist -.->|fallback| WatchlistFile
+
     YFNews -.->|publisher displayName| Publishers
     GNews -.->|<source> tag per item| Publishers
     YahooRSS -.->|item title| Publishers
@@ -78,6 +103,7 @@ flowchart LR
     PredLog -->|resolve prices| YFPrices
 
     Components --> User
+    ScannerPanels --> User
 ```
 
 Legend: green = data layer, purple = core logic, blue = UI, orange = storage, slate = external services we **call directly**, dashed grey = publisher names that appear in the News Feed but are **passed through** the aggregators above (we never make HTTP calls to those outlets directly).
@@ -88,33 +114,46 @@ Legend: green = data layer, purple = core logic, blue = UI, orange = storage, sl
 
 ```
 stock_analyzer/
-├── sidebar_web.py              # Streamlit entry point (the whole page render)
+├── sidebar_web.py              # Streamlit entry point (whole-page render + Scanner branch)
 ├── stockiq/
 │   ├── core/
 │   │   ├── analyzer.py         # UniversalStockAnalyzer — orchestrates the full analyze() pipeline
 │   │   └── prediction_log.py   # PredictionLog + calibrate_probs() / calibrate_confidence()
 │   ├── data/
-│   │   ├── collector.py        # EnhancedDataCollector — news, social, analyst, options data aggregation
-│   │   ├── institutional.py    # EnhancedInstitutionalData — 13F holders, insider transactions, earnings
-│   │   ├── options.py          # get_options_flow() + get_unusual_activity()
-│   │   └── tickers.py          # POPULAR_TICKERS dict for the autocomplete dropdown
+│   │   ├── collector.py            # EnhancedDataCollector — news, social, analyst, options data aggregation
+│   │   ├── institutional.py        # EnhancedInstitutionalData — 13F holders, insider transactions, earnings
+│   │   ├── options.py              # get_options_flow() + get_unusual_activity()
+│   │   ├── tickers.py              # POPULAR + SEC + searched_tickers merge for the autocomplete dropdown
+│   │   ├── watchlist.py            # Scanner watchlist add/remove/list — Supabase ↔ JSON file dispatch
+│   │   └── earnings_calendar.py    # Scanner earnings-strip helper — per-ticker @st.cache_data + non-equity filter
+│   ├── scanner/
+│   │   ├── signals.py          # compute_signals(ticker) — price · unusual count · aggressor net · news velocity
+│   │   ├── universe.py         # SCAN_CORE_TICKERS + get_scan_universe(watchlist, searched, max_total)
+│   │   └── scorer.py           # score_signal() / rank_signals() — composite score 0-100 + BULLISH/BEARISH bias
 │   ├── models/
 │   │   ├── predictor.py        # EnhancedPricePredictor (older, kept for back-compat shims)
 │   │   └── sentiment.py        # AdvancedSentimentAnalyzer (VADER/FinBERT placeholder)
 │   └── ui/
-│       ├── components.py       # All render functions: header_band, kv_block, news_feed_block, ...
-│       └── theme.py            # Dark CSS injected once per Streamlit session
+│       ├── components.py        # Analyze-view render functions: header_band, kv_block, news_feed_block, earnings_strip_block, ...
+│       ├── scanner_panels.py    # Scanner-view render functions: watchlist + top-movers tables, Add/Refresh row
+│       └── theme.py             # Dark CSS injected once per Streamlit session
 ├── migrations/
-│   └── 001_predictions.sql     # Supabase schema
+│   ├── 001_predictions.sql     # predictions table (AI calibration loop)
+│   ├── 002_searched_tickers.sql# searched_tickers table (autocomplete cache)
+│   └── 003_watchlist.sql       # watchlist table (Scanner focus list)
 ├── tests/
-│   ├── test_imports.py         # Package smoke test
-│   ├── test_deprecations.py    # Lint: no deprecated Streamlit/pandas APIs
-│   ├── test_prediction_log.py  # PredictionLog round-trip + summary
-│   ├── test_calibration.py     # calibrate_probs / calibrate_confidence math
+│   ├── test_imports.py             # Package smoke test
+│   ├── test_deprecations.py        # Lint: no deprecated Streamlit/pandas APIs
+│   ├── test_prediction_log.py      # PredictionLog round-trip + summary
+│   ├── test_calibration.py         # calibrate_probs / calibrate_confidence math
 │   ├── test_options_heuristics.py  # Aggressor + cluster detection
-│   ├── test_sentiment.py       # Keyword-based _analyze_text_sentiment
-│   ├── test_formatters.py      # fmt_price / fmt_pct / fmt_big_money
-│   └── test_earnings_calendar.py   # dict vs DataFrame parsing
+│   ├── test_sentiment.py           # Keyword-based _analyze_text_sentiment
+│   ├── test_formatters.py          # fmt_price / fmt_pct / fmt_big_money
+│   ├── test_earnings_calendar.py   # Analyzer's calendar parsing (dict vs DataFrame)
+│   ├── test_ticker_universe.py     # POPULAR + SEC + searched merge precedence + remember_ticker
+│   ├── test_watchlist.py           # Scanner watchlist add/remove/list + Supabase fallback
+│   ├── test_scanner_scorer.py      # score_signal math + rank_signals ordering
+│   └── test_scanner_universe.py    # Curated + watchlist + recent merge, dedupe, caps
 └── archive/                    # Older experimental files (streamlit_app.py etc.), not imported
 ```
 
@@ -141,6 +180,26 @@ Triggered by selecting a ticker (auto-analyze) or clicking the Analyze button:
    - `create_regime_prediction(..., horizon_days=63)` — 3-month 3-class regime
 5. **Backtest** runs `enhanced_backtest_strategy()` for the SPY + buy-and-hold comparison (backend only; not rendered).
 6. **sidebar_web.py** receives the combined result dict, calls each panel render function against it, logs the three predictions to Supabase, and lazily resolves any predictions older than their horizon.
+
+---
+
+## Data flow per Scanner render
+
+Triggered by selecting `🔍 Scanner` on the top-bar radio. `sidebar_web.py` short-circuits its Analyze pipeline and runs an entirely separate path, then calls `st.stop()`.
+
+1. **Watchlist load**: `stockiq.data.watchlist.list_tickers()` returns the user's saved focus list (Supabase ↔ JSON file dispatch).
+2. **Universe build**: `stockiq.scanner.universe.get_scan_universe(watchlist, searched, max_total=50)` unions:
+   - `SCAN_CORE_TICKERS` (~40 hand-curated mega-caps + popular ETFs)
+   - the watchlist
+   - up to 10 most recently searched tickers
+   Dedupes preserving first-occurrence order; caps total at 50 to stay inside yfinance's per-IP rate-limit budget.
+3. **Per-ticker signals**: for every ticker in watchlist + universe, `stockiq.scanner.signals.compute_signals(ticker)` fetches a lightweight snapshot — price, 1d Δ, unusual options count (V/OI ≥ 2× across the next 3 expiries), aggressor net (bid-ask heuristic), today's article count vs 7-day trailing avg. The whole call is wrapped in `@st.cache_data(ttl=600, max_entries=128)` keyed by ticker + a "force-refresh bust" int from session state. The refresh button bumps the bust int.
+4. **Scoring + ranking**: `stockiq.scanner.scorer.score_signal(snapshot)` adds a 0–100 composite (each axis clamped to ≤ 25 so no single dimension dominates) and a BULLISH/NEUTRAL/BEARISH bias from aggressor + change_1d agreement. `rank_signals(snapshots)` sorts by score descending; the top 30 surface in the Top movers panel.
+5. **Side-by-side render**: `stockiq.ui.scanner_panels.render_watchlist_section()` and `render_universe_section()` emit each table as a single `st.markdown(unsafe_allow_html=True)` call (HTML CSS Grid — splitting across multiple `st.markdown` calls makes Streamlit wrap each in its own container and breaks the grid layout). The watchlist table includes a 9th column with an inline `<a href="?wl_remove=<ticker>">×</a>`; a top-level query-param handler in `sidebar_web.py` reads `?wl_remove=` (and `?ticker=` for the inline pill links) and reruns.
+6. **Add-ticker resolution**: `_resolve_to_ticker(input)` in `scanner_panels.py` tries (a) literal symbol match against the merged universe, (b) `yfinance.Ticker(input).history(period="5d")` to validate any symbol yfinance recognizes, (c) fuzzy company-name match (word-boundary > substring; ambiguous matches resolve to the shortest ticker — usually the primary listing rather than a class-B share).
+7. **Earnings strip**: `stockiq.data.earnings_calendar.get_upcoming_earnings(tuple(watchlist + SCAN_CORE_TICKERS), days_ahead=7)` returns a sorted list of next-7-day prints. `_next_earnings_for(ticker)` is per-ticker `@st.cache_data(ttl=86400)` so day-2+ Scanner loads are essentially free; the function short-circuits for ETFs/indexes/forex/crypto via a `_is_non_equity()` filter (prefix `^`, suffixes `=X` / `-USD`, and a hard-coded ETF set) before any yfinance call. `earnings_strip_block(rows)` in `components.py` renders nothing when `rows` is empty so the strip collapses cleanly when no prints are scheduled.
+
+A click on the Analyze button while on the Scanner page swaps the radio back via an `on_click` callback (`_force_analyze_view`). Mutating `st.session_state["view_select"]` *after* the radio has rendered raises `StreamlitAPIException`, but the callback runs before the next rerun so the radio reads the new value when reconstructed.
 
 ---
 
@@ -198,6 +257,7 @@ A note on the resolution job: PostgREST can't express `timestamp + resolution_ho
 |---|---|---|
 | `data/predictions.parquet` | Same schema as the predictions table; full read + full rewrite per log call | `_log_parquet`, `_resolve_parquet` |
 | `data/searched_tickers.json` | `{ticker: company_name}` flat dict | `_remember_file`, `_load_searched_file` |
+| `data/watchlist.json` | Flat list of ticker strings, newest-first (Scanner focus list) | `_add_file`, `_remove_file`, `_list_file` (in `stockiq.data.watchlist`) |
 
 On Streamlit Cloud both files live on the ephemeral container filesystem — they survive reruns within a container but reset on redeploy. That's the main reason to prefer Supabase once you're running in production.
 

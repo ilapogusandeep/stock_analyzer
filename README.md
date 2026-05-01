@@ -104,7 +104,7 @@ We parse the `<source>` tag from every Google News RSS item and cross-fetch yfin
 
 ## The Scanner view
 
-A second top-level mode toggleable from the top bar (radio at right): switches the page from the per-ticker Analyze dashboard into a market-scanner that surfaces opportunities.
+A second top-level mode toggleable from the top bar (radio at right): switches the page from the per-ticker Analyze dashboard into a market-scanner that surfaces opportunities. Layout is **two side-by-side panels** (Watchlist on the left, Top movers on the right) plus a **bottom-width earnings strip**. Both tables are scrollable with sticky headers so the columns stay legible as you page through.
 
 ### Watchlist
 
@@ -119,11 +119,15 @@ User-curated list of tickers persisted to Supabase (`watchlist` table) so it sur
 | Composite score | 0–100 weighted blend, clamped per-axis at 25 so no single dimension dominates |
 | Bias | BULLISH / NEUTRAL / BEARISH from aggressor + change_1d agreement |
 
-Add/remove tickers inline. Manual "Refresh signals" button to re-pull (cached 10 min so a refresh bypasses cache).
+**Adding a ticker**: type in the input below the table and hit `+ Add`. The Add path tries (in order) (1) the literal symbol against our merged universe, (2) yfinance's resolver for any symbol it recognizes (crypto `BTC-USD`, indices `^GSPC`, forex `EURUSD=X`), then (3) **fuzzy company-name match** against the merged universe — so typing `Oracle` resolves to `ORCL`, `Apple` to `AAPL`, `tesla` to `TSLA`. If none of those resolve, you get a friendly error explaining the symbol formats.
+
+**Removing a ticker**: each row has an inline `×` pill in the rightmost column — single click removes it. Rows whose symbol returns no price data render dimmed with a red "no data" tag so you can spot typos / delistings at a glance.
+
+Manual "🔄 Refresh" button beside the Add input forces a re-pull (results are cached 10 min by default).
 
 ### Top movers (curated universe)
 
-Same lightweight scan run across ~50 hand-picked names — mega-cap tech + semis + finance + popular ETFs + your watchlist + recent searches (capped). Sorted by composite score; top 15 surface in the table.
+Same lightweight scan run across ~50 hand-picked names — mega-cap tech + semis + finance + popular ETFs + your watchlist + recent searches (capped). Sorted by composite score; **top 30** surface in the table (was 15 — bumped to fill the side-by-side layout). Both watchlist and top-movers tables cap at ~520px height with internal scroll + sticky headers, so the page stays compact without truncating data.
 
 Honest caveats:
 - The aggressor signal is a free-tier heuristic (yfinance gives end-of-day snapshots, not trade prints) — same caveats as the Analyze view's Unusual Options panel.
@@ -131,6 +135,16 @@ Honest caveats:
 - The Top movers list is opinionated about the universe. To scan a wider net you'd want Polygon ($29/mo) and a real per-ticker rate-limit budget.
 
 Click any ticker pill in the scanner → routes back to the Analyze view via `?ticker=` query param.
+
+### Upcoming earnings (full-width band below the two tables)
+
+A horizontal strip of the next 7 days of earnings prints across **watchlist ∪ ~50 curated names**. Each card shows ticker · day-of-week + M/D · time-to-event pill (`today` red / `tomorrow` or `in 2-3d` yellow / `in 4-7d` indigo) · estimated EPS when yfinance has it; clicking a card routes you to that ticker's Analyze dashboard.
+
+Implementation details that matter:
+- **Hidden when empty** — if no curated names report in the next 7 days the strip doesn't render, keeping the page clean.
+- **Per-ticker `@st.cache_data` ttl=86400** — earnings dates don't change intraday, so day-2+ Scanner loads pay zero yfinance cost. The first cold load takes ~30s for ~50 tickers (you'll see a "Scanning upcoming earnings…" spinner).
+- **Non-equity pre-filter** — ETFs (SPY/QQQ/DIA/XLK/...), indexes (`^VIX`), forex (`*=X`), and crypto (`*-USD`) short-circuit before any yfinance call. They don't report earnings and were spamming logs with "no earnings dates" warnings.
+- **Reuses the dict/DataFrame fallback dance** from `stockiq.core.analyzer.get_earnings_calendar` — yfinance's `ticker.calendar` API has changed return types over time, so we handle both, then fall back to `ticker.earnings_dates` for the rest.
 
 ---
 
